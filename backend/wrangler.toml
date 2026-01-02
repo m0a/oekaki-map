@@ -1,0 +1,30 @@
+name = "oekaki-map"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Static assets (frontend build)
+assets = { directory = "../frontend/dist", binding = "ASSETS" }
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "oekaki-map-db"
+database_id = "2ff86c9e-13fc-4ddc-93b5-ad33b19dd2de"
+
+# R2 Bucket binding
+[[r2_buckets]]
+binding = "TILES"
+bucket_name = "oekaki-map-tiles"
+
+[vars]
+ENVIRONMENT = "production"
+
+# Local development settings
+[dev]
+port = 8787
+local_protocol = "http"
+
+# Production environment
+[env.production]
+vars = { ENVIRONMENT = "production" }
