@@ -1,0 +1,181 @@
+openapi: 3.0.3
+info:
+  title: Oekaki Map Tiles API Extension
+  description: レイヤー対応のためのタイルAPI拡張仕様
+  version: 1.0.0
+
+servers:
+  - url: /api
+    description: API base path
+
+paths:
+  /canvas/{canvasId}/tiles:
+    post:
+      summary: タイル保存（レイヤー対応）
+      description: 描画タイルを保存。layerIdパラメータでレイヤーを指定。
+      operationId: saveTiles
+      tags:
+        - Tiles
+      parameters:
+        - $ref: '#/components/parameters/canvasId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                layerId:
+                  type: string
+                  description: 保存先レイヤーID（省略時はデフォルトレイヤー）
+                tiles:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: WebP形式のタイル画像
+      responses:
+        '200':
+          description: 保存成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SaveTilesResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    get:
+      summary: タイル一覧取得（レイヤー対応）
+      description: 指定範囲のタイル座標を取得。layerIdでフィルタ可能。
+      operationId: getTiles
+      tags:
+        - Tiles
+      parameters:
+        - $ref: '#/components/parameters/canvasId'
+        - name: z
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 19
+        - name: minX
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: maxX
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: minY
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: maxY
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: layerId
+          in: query
+          required: false
+          description: フィルタするレイヤーID（省略時は全レイヤー）
+          schema:
+            type: string
+      responses:
+        '200':
+          description: タイル座標一覧
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetTilesResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  parameters:
+    canvasId:
+      name: canvasId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 21
+        maxLength: 21
+
+  schemas:
+    TileCoordinate:
+      type: object
+      required:
+        - z
+        - x
+        - y
+      properties:
+        z:
+          type: integer
+          description: ズームレベル
+        x:
+          type: integer
+          description: X座標
+        y:
+          type: integer
+          description: Y座標
+        layerId:
+          type: string
+          nullable: true
+          description: 所属レイヤーID（nullはデフォルトレイヤー）
+
+    GetTilesResponse:
+      type: object
+      required:
+        - tiles
+      properties:
+        tiles:
+          type: array
+          items:
+            $ref: '#/components/schemas/TileCoordinate'
+
+    SaveTilesResponse:
+      type: object
+      required:
+        - saved
+        - canvas
+      properties:
+        saved:
+          type: array
+          items:
+            $ref: '#/components/schemas/TileCoordinate'
+        canvas:
+          type: object
+          description: 更新後のキャンバス情報
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+
+  responses:
+    NotFound:
+      description: リソースが見つからない
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    BadRequest:
+      description: リクエストが不正
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

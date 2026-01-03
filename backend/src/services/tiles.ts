@@ -164,6 +164,93 @@ export class TileService {
 
     return result !== null;
   }
+
+  // Get tiles in visible area (with optional layer filter)
+  async getTilesInArea(
+    canvasId: string,
+    z: number,
+    minX: number,
+    maxX: number,
+    minY: number,
+    maxY: number,
+    layerId?: string
+  ): Promise<TileCoordinate[]> {
+    let query: string;
+    let params: (string | number)[];
+
+    if (layerId) {
+      query = `SELECT z, x, y FROM drawing_tile
+               WHERE canvas_id = ? AND z = ? AND x >= ? AND x <= ? AND y >= ? AND y <= ?
+               AND (layer_id = ? OR layer_id IS NULL)`;
+      params = [canvasId, z, minX, maxX, minY, maxY, layerId];
+    } else {
+      query = `SELECT z, x, y FROM drawing_tile
+               WHERE canvas_id = ? AND z = ? AND x >= ? AND x <= ? AND y >= ? AND y <= ?`;
+      params = [canvasId, z, minX, maxX, minY, maxY];
+    }
+
+    const results = await this.db
+      .prepare(query)
+      .bind(...params)
+      .all<{ z: number; x: number; y: number }>();
+
+    return results.results.map((row) => ({
+      z: row.z,
+      x: row.x,
+      y: row.y,
+    }));
+  }
+
+  // Save tile with layer association
+  async saveTileWithLayer(
+    canvasId: string,
+    layerId: string | null,
+    z: number,
+    x: number,
+    y: number,
+    imageData: ArrayBuffer
+  ): Promise<DrawingTile> {
+    const tileId = `${canvasId}/${z}/${x}/${y}`;
+    const r2Key = StorageService.generateKey(canvasId, z, x, y);
+    const now = new Date().toISOString();
+
+    // Upload to R2
+    await this.storage.uploadTile(canvasId, z, x, y, imageData);
+
+    // Check if tile exists
+    const existing = await this.db
+      .prepare(`SELECT id FROM drawing_tile WHERE id = ?`)
+      .bind(tileId)
+      .first();
+
+    if (existing) {
+      // Update existing tile
+      await this.db
+        .prepare(`UPDATE drawing_tile SET layer_id = ?, updated_at = ? WHERE id = ?`)
+        .bind(layerId, now, tileId)
+        .run();
+    } else {
+      // Insert new tile with layer_id
+      await this.db
+        .prepare(
+          `INSERT INTO drawing_tile (id, canvas_id, layer_id, z, x, y, r2_key, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .bind(tileId, canvasId, layerId, z, x, y, r2Key, now, now)
+        .run();
+    }
+
+    return {
+      id: tileId,
+      canvasId,
+      z,
+      x,
+      y,
+      r2Key,
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
 }
 
 // Factory function

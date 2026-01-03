@@ -5,6 +5,7 @@ import type { Env } from './types/index';
 import { canvasRoutes } from './routes/canvas';
 import { tilesRoutes } from './routes/tiles';
 import { logsRoutes } from './routes/logs';
+import { layersRoutes } from './routes/layers';
 
 // Extended environment with static assets
 interface ExtendedEnv extends Env {
@@ -34,6 +35,7 @@ app.get('/api/health', (c) => {
 // API routes
 app.route('/api/canvas', canvasRoutes);
 app.route('/api/canvas', tilesRoutes); // /api/canvas/:id/tiles
+app.route('/api/canvas', layersRoutes); // /api/canvas/:id/layers
 app.route('/api/tiles', tilesRoutes);  // /api/tiles/:canvasId/:z/:x/:y.webp
 app.route('/api/logs', logsRoutes);    // /api/logs/error, /api/logs/debug
 

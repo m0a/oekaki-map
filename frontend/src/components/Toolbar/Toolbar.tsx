@@ -11,6 +11,8 @@ interface ToolbarProps {
   canRedo: boolean;
   onUndo: () => void;
   onRedo: () => void;
+  isLayerPanelOpen?: boolean;
+  onToggleLayerPanel?: () => void;
 }
 
 export function Toolbar({
@@ -24,6 +26,8 @@ export function Toolbar({
   canRedo,
   onUndo,
   onRedo,
+  isLayerPanelOpen,
+  onToggleLayerPanel,
 }: ToolbarProps) {
   return (
     <div
@@ -203,6 +207,36 @@ export function Toolbar({
           Move
         </button>
       </div>
+
+      {/* Layer panel toggle button */}
+      {onToggleLayerPanel && (
+        <>
+          {/* Separator */}
+          <div
+            style={{
+              width: 1,
+              backgroundColor: '#ddd',
+              margin: '0 4px',
+            }}
+          />
+          <button
+            data-testid="layer-toggle-button"
+            onClick={onToggleLayerPanel}
+            style={{
+              padding: '8px 12px',
+              borderRadius: 8,
+              backgroundColor: isLayerPanelOpen ? '#007AFF' : '#f0f0f0',
+              color: isLayerPanelOpen ? 'white' : '#333',
+              border: 'none',
+              cursor: 'pointer',
+              fontWeight: isLayerPanelOpen ? 'bold' : 'normal',
+            }}
+            aria-label="Toggle layer panel"
+          >
+            Layers
+          </button>
+        </>
+      )}
     </div>
   );
 }
