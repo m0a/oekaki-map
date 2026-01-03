@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import type { MapPosition, DrawingState } from '../../types';
+import type { MapPosition, DrawingState, StrokeData } from '../../types';
 import { loadTilesToCanvas } from '../../utils/tiles';
 import { api } from '../../services/api';
 
@@ -15,11 +15,12 @@ interface MapWithDrawingProps {
   position?: MapPosition;
   onPositionChange?: (position: MapPosition) => void;
   drawingState: DrawingState;
-  onStrokeEnd?: (canvas: HTMLCanvasElement, bounds: L.LatLngBounds, zoom: number) => void;
+  onStrokeEnd?: (canvas: HTMLCanvasElement, bounds: L.LatLngBounds, zoom: number, strokeData?: StrokeData) => void;
   onCanvasOriginInit?: (origin: L.LatLng, zoom: number) => void;
   tiles?: TileInfo[] | undefined;
   canvasId?: string | undefined;
   onFlushSave?: () => Promise<void>;
+  strokes?: StrokeData[];
 }
 
 // Default position: Tokyo, Japan
@@ -42,6 +43,7 @@ export function MapWithDrawing({
   tiles,
   canvasId,
   onFlushSave,
+  strokes,
 }: MapWithDrawingProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -54,6 +56,9 @@ export function MapWithDrawing({
   // Drawing state
   const isDrawingRef = useRef(false);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
+
+  // Current stroke points for undo/redo
+  const currentStrokePointsRef = useRef<Array<{ x: number; y: number }>>([]);
 
   // Canvas origin (updated on map move)
   const canvasOriginRef = useRef<L.LatLng | null>(null);
@@ -182,10 +187,12 @@ export function MapWithDrawing({
     e.stopPropagation();
 
     isDrawingRef.current = true;
+    currentStrokePointsRef.current = [];
 
     const point = screenToCanvas(e.clientX, e.clientY);
     if (point) {
       lastPointRef.current = point;
+      currentStrokePointsRef.current.push(point);
 
       // Draw a dot
       const ctx = getContext();
@@ -214,6 +221,7 @@ export function MapWithDrawing({
     if (point && lastPointRef.current) {
       drawLine(lastPointRef.current, point);
       lastPointRef.current = point;
+      currentStrokePointsRef.current.push(point);
     }
   }, [drawingState.mode, screenToCanvas, drawLine, isDrawableZoom]);
 
@@ -229,9 +237,27 @@ export function MapWithDrawing({
       const map = mapRef.current;
       const bounds = map.getBounds();
       const zoom = map.getZoom();
-      onStrokeEnd(canvasRef.current, bounds, zoom);
+
+      // Create stroke data for undo/redo
+      const strokeData: StrokeData = {
+        id: crypto.randomUUID(),
+        points: [...currentStrokePointsRef.current],
+        color: drawingState.color,
+        thickness: drawingState.thickness,
+        mode: drawingState.mode === 'erase' ? 'erase' : 'draw',
+        timestamp: Date.now(),
+        canvasOrigin: {
+          lat: canvasOriginRef.current.lat,
+          lng: canvasOriginRef.current.lng,
+        },
+        zoom: zoom,
+      };
+
+      onStrokeEnd(canvasRef.current, bounds, zoom, strokeData);
     }
-  }, [onStrokeEnd]);
+
+    currentStrokePointsRef.current = [];
+  }, [onStrokeEnd, drawingState.color, drawingState.thickness, drawingState.mode]);
 
   // Update canvas size to match container
   const updateCanvasSize = useCallback(() => {
@@ -416,6 +442,63 @@ export function MapWithDrawing({
 
     void loadInitialTiles();
   }, [tiles, canvasId]);
+
+  // Redraw strokes from history (for undo/redo)
+  const redrawStrokes = useCallback((strokesData: StrokeData[]) => {
+    const ctx = getContext();
+    if (!ctx || !canvasRef.current) return;
+
+    // Clear canvas
+    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+
+    // Redraw each stroke
+    for (const stroke of strokesData) {
+      if (stroke.points.length === 0) continue;
+
+      ctx.beginPath();
+      ctx.strokeStyle = stroke.mode === 'erase' ? 'rgba(0,0,0,1)' : stroke.color;
+      ctx.lineWidth = stroke.thickness;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      if (stroke.mode === 'erase') {
+        ctx.globalCompositeOperation = 'destination-out';
+      } else {
+        ctx.globalCompositeOperation = 'source-over';
+      }
+
+      const firstPoint = stroke.points[0];
+      if (!firstPoint) continue;
+
+      if (stroke.points.length === 1) {
+        // Single point - draw a dot
+        ctx.beginPath();
+        ctx.arc(firstPoint.x, firstPoint.y, stroke.thickness / 2, 0, Math.PI * 2);
+        ctx.fillStyle = stroke.mode === 'erase' ? 'rgba(0,0,0,1)' : stroke.color;
+        ctx.fill();
+      } else {
+        // Multiple points - draw lines
+        ctx.moveTo(firstPoint.x, firstPoint.y);
+        for (let i = 1; i < stroke.points.length; i++) {
+          const point = stroke.points[i];
+          if (point) {
+            ctx.lineTo(point.x, point.y);
+          }
+        }
+        ctx.stroke();
+      }
+    }
+
+    // Reset composite operation
+    ctx.globalCompositeOperation = 'source-over';
+  }, [getContext]);
+
+  // Redraw when strokes change (undo/redo)
+  useEffect(() => {
+    if (strokes !== undefined) {
+      redrawStrokes(strokes);
+    }
+  }, [strokes, redrawStrokes]);
 
   const cursor = drawingState.mode === 'navigate' ? 'grab' : !isDrawableZoom ? 'not-allowed' : drawingState.mode === 'draw' ? 'crosshair' : 'cell';
   const pointerEvents = drawingState.mode === 'navigate' ? 'none' : 'auto';

@@ -7,6 +7,10 @@ interface ToolbarProps {
   onColorChange: (color: string) => void;
   onThicknessChange: (thickness: number) => void;
   onModeChange: (mode: DrawingState['mode']) => void;
+  canUndo: boolean;
+  canRedo: boolean;
+  onUndo: () => void;
+  onRedo: () => void;
 }
 
 export function Toolbar({
@@ -16,6 +20,10 @@ export function Toolbar({
   onColorChange,
   onThicknessChange,
   onModeChange,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo,
 }: ToolbarProps) {
   return (
     <div
@@ -94,6 +102,51 @@ export function Toolbar({
             />
           </button>
         ))}
+      </div>
+
+      {/* Separator */}
+      <div
+        style={{
+          width: 1,
+          backgroundColor: '#ddd',
+          margin: '0 4px',
+        }}
+      />
+
+      {/* Undo/Redo buttons */}
+      <div style={{ display: 'flex', gap: 4 }}>
+        <button
+          onClick={onUndo}
+          disabled={!canUndo}
+          style={{
+            padding: '8px 12px',
+            borderRadius: 8,
+            backgroundColor: canUndo ? '#f0f0f0' : '#e0e0e0',
+            color: canUndo ? '#333' : '#999',
+            border: 'none',
+            cursor: canUndo ? 'pointer' : 'not-allowed',
+            fontWeight: 'normal',
+          }}
+          aria-label="Undo"
+        >
+          ↩ Undo
+        </button>
+        <button
+          onClick={onRedo}
+          disabled={!canRedo}
+          style={{
+            padding: '8px 12px',
+            borderRadius: 8,
+            backgroundColor: canRedo ? '#f0f0f0' : '#e0e0e0',
+            color: canRedo ? '#333' : '#999',
+            border: 'none',
+            cursor: canRedo ? 'pointer' : 'not-allowed',
+            fontWeight: 'normal',
+          }}
+          aria-label="Redo"
+        >
+          Redo ↪
+        </button>
       </div>
 
       {/* Separator */}
