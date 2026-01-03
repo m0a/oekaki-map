@@ -1,0 +1,31 @@
+{
+  "name": "oekaki-map-backend",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage",
+    "lint": "eslint src --ext ts",
+    "type-check": "tsc --noEmit",
+    "db:migrate": "wrangler d1 execute oekaki-map-db --file=./src/db/schema.sql"
+  },
+  "dependencies": {
+    "hono": "^4.6.0",
+    "@hono/zod-validator": "^0.4.2",
+    "zod": "^3.24.1",
+    "nanoid": "^5.0.9"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241205.0",
+    "wrangler": "^3.99.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8",
+    "@vitest/coverage-v8": "^2.1.8"
+  },
+  "exports": {
+    "./types": "./src/types/index.ts"
+  }
+}

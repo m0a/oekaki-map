@@ -1,0 +1,37 @@
+{
+  "name": "oekaki-map",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "build:all": "npm run build && cd backend && npm run type-check",
+    "test": "cd frontend && npm test && cd ../backend && npm test",
+    "test:e2e": "playwright test",
+    "lint": "eslint .",
+    "type-check": "cd frontend && npm run type-check && cd ../backend && npm run type-check",
+    "db:create": "cd backend && wrangler d1 create oekaki-map-db",
+    "db:migrate": "cd backend && wrangler d1 execute oekaki-map-db --remote --file=./src/db/schema.sql",
+    "db:migrate:local": "cd backend && wrangler d1 execute oekaki-map-db --local --file=./src/db/schema.sql",
+    "r2:create": "cd backend && wrangler r2 bucket create oekaki-map-tiles",
+    "deploy": "npm run build && cd backend && npm run deploy",
+    "setup": "npm run db:create && npm run r2:create && echo '\\n⚠️  wrangler.tomlのdatabase_idを上記の値に更新してください'"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@playwright/test": "^1.49.1",
+    "concurrently": "^9.1.0",
+    "eslint": "^9.17.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "eslint-plugin-react-refresh": "^0.4.16",
+    "globals": "^15.14.0",
+    "typescript-eslint": "^8.18.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "packageManager": "pnpm@9.15.1"
+}

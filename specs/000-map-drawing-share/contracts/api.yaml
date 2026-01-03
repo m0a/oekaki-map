@@ -1,0 +1,412 @@
+openapi: 3.1.0
+info:
+  title: Oekaki Map API
+  description: API for map drawing and sharing service
+  version: 1.0.0
+
+servers:
+  - url: https://api.oekaki-map.example.com
+    description: Production API
+
+paths:
+  /canvas:
+    post:
+      summary: Create a new canvas
+      operationId: createCanvas
+      tags:
+        - Canvas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCanvasRequest'
+      responses:
+        '201':
+          description: Canvas created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateCanvasResponse'
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /canvas/{canvasId}:
+    get:
+      summary: Get canvas metadata and tile list
+      operationId: getCanvas
+      tags:
+        - Canvas
+      parameters:
+        - name: canvasId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 21
+            maxLength: 21
+      responses:
+        '200':
+          description: Canvas found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetCanvasResponse'
+        '404':
+          description: Canvas not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    patch:
+      summary: Update canvas metadata (map position)
+      operationId: updateCanvas
+      tags:
+        - Canvas
+      parameters:
+        - name: canvasId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCanvasRequest'
+      responses:
+        '200':
+          description: Canvas updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Canvas'
+        '404':
+          description: Canvas not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /canvas/{canvasId}/tiles:
+    get:
+      summary: Get tile coordinates for visible area
+      operationId: getTiles
+      tags:
+        - Tiles
+      parameters:
+        - name: canvasId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: z
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 19
+        - name: minX
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 0
+        - name: maxX
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 0
+        - name: minY
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 0
+        - name: maxY
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        '200':
+          description: List of tiles in the requested area
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetTilesResponse'
+        '404':
+          description: Canvas not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      summary: Save drawing tiles
+      operationId: saveTiles
+      tags:
+        - Tiles
+      parameters:
+        - name: canvasId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                tiles:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      z:
+                        type: integer
+                      x:
+                        type: integer
+                      y:
+                        type: integer
+                      image:
+                        type: string
+                        format: binary
+                        description: WebP image blob
+              required:
+                - tiles
+      responses:
+        '200':
+          description: Tiles saved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SaveTilesResponse'
+        '400':
+          description: Invalid tile data or limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Canvas not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /tiles/{canvasId}/{z}/{x}/{y}.webp:
+    get:
+      summary: Get a single tile image
+      operationId: getTileImage
+      tags:
+        - Tiles
+      parameters:
+        - name: canvasId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: z
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 19
+        - name: x
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 0
+        - name: y
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        '200':
+          description: Tile image
+          content:
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Tile not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    Canvas:
+      type: object
+      required:
+        - id
+        - centerLat
+        - centerLng
+        - zoom
+        - createdAt
+        - updatedAt
+        - tileCount
+      properties:
+        id:
+          type: string
+          minLength: 21
+          maxLength: 21
+          example: "V1StGXR8_Z5jdHi6B-myT"
+        centerLat:
+          type: number
+          minimum: -90
+          maximum: 90
+          example: 35.6812
+        centerLng:
+          type: number
+          minimum: -180
+          maximum: 180
+          example: 139.7671
+        zoom:
+          type: integer
+          minimum: 1
+          maximum: 19
+          example: 14
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        tileCount:
+          type: integer
+          minimum: 0
+          maximum: 1000
+          example: 5
+
+    TileCoordinate:
+      type: object
+      required:
+        - z
+        - x
+        - y
+      properties:
+        z:
+          type: integer
+          minimum: 1
+          maximum: 19
+        x:
+          type: integer
+          minimum: 0
+        y:
+          type: integer
+          minimum: 0
+
+    CreateCanvasRequest:
+      type: object
+      required:
+        - centerLat
+        - centerLng
+        - zoom
+      properties:
+        centerLat:
+          type: number
+          minimum: -90
+          maximum: 90
+          example: 35.6812
+        centerLng:
+          type: number
+          minimum: -180
+          maximum: 180
+          example: 139.7671
+        zoom:
+          type: integer
+          minimum: 1
+          maximum: 19
+          example: 14
+
+    CreateCanvasResponse:
+      type: object
+      required:
+        - canvas
+      properties:
+        canvas:
+          $ref: '#/components/schemas/Canvas'
+
+    GetCanvasResponse:
+      type: object
+      required:
+        - canvas
+        - tiles
+      properties:
+        canvas:
+          $ref: '#/components/schemas/Canvas'
+        tiles:
+          type: array
+          items:
+            $ref: '#/components/schemas/TileCoordinate'
+
+    UpdateCanvasRequest:
+      type: object
+      properties:
+        centerLat:
+          type: number
+          minimum: -90
+          maximum: 90
+        centerLng:
+          type: number
+          minimum: -180
+          maximum: 180
+        zoom:
+          type: integer
+          minimum: 1
+          maximum: 19
+
+    GetTilesResponse:
+      type: object
+      required:
+        - tiles
+      properties:
+        tiles:
+          type: array
+          items:
+            $ref: '#/components/schemas/TileCoordinate'
+
+    SaveTilesResponse:
+      type: object
+      required:
+        - saved
+        - canvas
+      properties:
+        saved:
+          type: array
+          items:
+            $ref: '#/components/schemas/TileCoordinate'
+        canvas:
+          $ref: '#/components/schemas/Canvas'
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          example: "NOT_FOUND"
+        message:
+          type: string
+          example: "Canvas not found"
