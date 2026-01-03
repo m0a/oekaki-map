@@ -53,8 +53,8 @@ export function useShare(): UseShareReturn {
         shareZoom: position.zoom,
       });
 
-      // Generate share URL
-      const shareUrl = `${window.location.origin}/${canvasId}`;
+      // Generate share URL (matches /c/:canvasId pattern in main.tsx)
+      const shareUrl = `${window.location.origin}/c/${canvasId}`;
 
       // Use Web Share API if available (mobile)
       if (hasShareApi) {

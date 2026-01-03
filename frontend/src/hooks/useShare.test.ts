@@ -129,7 +129,7 @@ describe('useShare', () => {
 
       expect(mockShare).toHaveBeenCalledWith({
         title: 'おえかきマップ',
-        url: expect.stringContaining('/canvas123') as string,
+        url: expect.stringContaining('/c/canvas123') as string,
       });
     });
 
@@ -284,7 +284,7 @@ describe('useShare', () => {
 
       // Should have called clipboard API
       expect(mockWriteText).toHaveBeenCalledWith(
-        expect.stringContaining('/canvas123')
+        expect.stringContaining('/c/canvas123')
       );
     });
 
