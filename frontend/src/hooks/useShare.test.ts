@@ -22,8 +22,8 @@ Object.defineProperty(navigator, 'clipboard', {
   configurable: true,
 });
 
-// Store original share
-const originalShare = navigator.share;
+// Store original share - bind to navigator to avoid unbound-method error
+const originalShare = navigator.share?.bind(navigator);
 
 describe('useShare', () => {
   beforeEach(() => {
@@ -129,7 +129,7 @@ describe('useShare', () => {
 
       expect(mockShare).toHaveBeenCalledWith({
         title: 'おえかきマップ',
-        url: expect.stringContaining('/canvas123'),
+        url: expect.stringContaining('/canvas123') as string,
       });
     });
 
@@ -140,7 +140,7 @@ describe('useShare', () => {
       });
 
       // Create a promise we can control
-      let resolveShare: () => void;
+      let resolveShare: (() => void) | undefined;
       const sharePromise = new Promise<void>((resolve) => {
         resolveShare = resolve;
       });
@@ -165,7 +165,9 @@ describe('useShare', () => {
 
       // Resolve the share
       await act(async () => {
-        resolveShare!();
+        if (resolveShare) {
+          resolveShare();
+        }
         await sharePromise;
       });
 

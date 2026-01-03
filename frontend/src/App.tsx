@@ -57,10 +57,14 @@ export function App({ canvasId }: AppProps) {
 
       if (hasShareState) {
         // Use shared position (for users opening a shared URL)
+        // Type guard ensures these are non-null after hasShareState check
+        const shareLat = canvas.canvas.shareLat as number;
+        const shareLng = canvas.canvas.shareLng as number;
+        const shareZoom = canvas.canvas.shareZoom as number;
         setMapPosition({
-          lat: canvas.canvas.shareLat!,
-          lng: canvas.canvas.shareLng!,
-          zoom: canvas.canvas.shareZoom!,
+          lat: shareLat,
+          lng: shareLng,
+          zoom: shareZoom,
         });
       } else {
         // Use saved canvas position

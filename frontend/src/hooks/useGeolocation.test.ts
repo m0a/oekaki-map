@@ -2,8 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useGeolocation } from './useGeolocation';
 
+// Type for geolocation callbacks
+type PositionCallback = (position: GeolocationPosition) => void;
+type ErrorCallback = (error: GeolocationPositionError) => void;
+
 // Mock navigator.geolocation
-const mockGetCurrentPosition = vi.fn();
+const mockGetCurrentPosition = vi.fn<[PositionCallback, ErrorCallback?, PositionOptions?], undefined>();
 const mockGeolocation = {
   getCurrentPosition: mockGetCurrentPosition,
 };
@@ -34,9 +38,9 @@ describe('useGeolocation', () => {
           latitude: 35.6762,
           longitude: 139.6503,
         },
-      };
+      } as GeolocationPosition;
 
-      mockGetCurrentPosition.mockImplementation((success) => {
+      mockGetCurrentPosition.mockImplementation((success: PositionCallback) => {
         success(mockPosition);
       });
 
@@ -54,13 +58,11 @@ describe('useGeolocation', () => {
     });
 
     it('should set isLoading while getting position', async () => {
-      let resolvePosition: (position: GeolocationPosition) => void;
+      let resolvePosition: PositionCallback | undefined;
       const positionPromise = new Promise<void>((resolve) => {
-        mockGetCurrentPosition.mockImplementation((success) => {
-          resolvePosition = () => {
-            success({
-              coords: { latitude: 35.6762, longitude: 139.6503 },
-            });
+        mockGetCurrentPosition.mockImplementation((success: PositionCallback) => {
+          resolvePosition = (pos: GeolocationPosition) => {
+            success(pos);
             resolve();
           };
         });
@@ -79,9 +81,11 @@ describe('useGeolocation', () => {
       });
 
       await act(async () => {
-        resolvePosition!({
-          coords: { latitude: 35.6762, longitude: 139.6503 },
-        } as GeolocationPosition);
+        if (resolvePosition) {
+          resolvePosition({
+            coords: { latitude: 35.6762, longitude: 139.6503 },
+          } as GeolocationPosition);
+        }
         await positionPromise;
       });
 
@@ -94,10 +98,10 @@ describe('useGeolocation', () => {
       const mockError = {
         code: 1, // PERMISSION_DENIED
         message: 'User denied Geolocation',
-      };
+      } as GeolocationPositionError;
 
-      mockGetCurrentPosition.mockImplementation((_, error) => {
-        error(mockError);
+      mockGetCurrentPosition.mockImplementation((_success: PositionCallback, error?: ErrorCallback) => {
+        if (error) error(mockError);
       });
 
       const { result } = renderHook(() => useGeolocation());
@@ -113,10 +117,10 @@ describe('useGeolocation', () => {
       const mockError = {
         code: 2, // POSITION_UNAVAILABLE
         message: 'Position unavailable',
-      };
+      } as GeolocationPositionError;
 
-      mockGetCurrentPosition.mockImplementation((_, error) => {
-        error(mockError);
+      mockGetCurrentPosition.mockImplementation((_success: PositionCallback, error?: ErrorCallback) => {
+        if (error) error(mockError);
       });
 
       const { result } = renderHook(() => useGeolocation());
@@ -132,10 +136,10 @@ describe('useGeolocation', () => {
       const mockError = {
         code: 3, // TIMEOUT
         message: 'Timeout',
-      };
+      } as GeolocationPositionError;
 
-      mockGetCurrentPosition.mockImplementation((_, error) => {
-        error(mockError);
+      mockGetCurrentPosition.mockImplementation((_success: PositionCallback, error?: ErrorCallback) => {
+        if (error) error(mockError);
       });
 
       const { result } = renderHook(() => useGeolocation());
@@ -153,10 +157,10 @@ describe('useGeolocation', () => {
       const mockError = {
         code: 1,
         message: 'User denied Geolocation',
-      };
+      } as GeolocationPositionError;
 
-      mockGetCurrentPosition.mockImplementation((_, error) => {
-        error(mockError);
+      mockGetCurrentPosition.mockImplementation((_success: PositionCallback, error?: ErrorCallback) => {
+        if (error) error(mockError);
       });
 
       const { result } = renderHook(() => useGeolocation());
