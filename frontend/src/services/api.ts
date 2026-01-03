@@ -54,6 +54,20 @@ export const api = {
       if (!res.ok) throw new Error('Failed to update canvas');
       return res.json() as Promise<Canvas>;
     },
+
+    // Update share state (coordinates and zoom for URL sharing)
+    async updateShareState(
+      canvasId: string,
+      data: { shareLat: number; shareLng: number; shareZoom: number }
+    ): Promise<Canvas> {
+      const res = await fetch(`${API_BASE_URL}/canvas/${canvasId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to update share state');
+      return res.json() as Promise<Canvas>;
+    },
   },
 
   // Tile operations

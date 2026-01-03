@@ -22,8 +22,8 @@ export class CanvasService {
 
     await this.db
       .prepare(
-        `INSERT INTO canvas (id, center_lat, center_lng, zoom, created_at, updated_at, tile_count)
-         VALUES (?, ?, ?, ?, ?, ?, 0)`
+        `INSERT INTO canvas (id, center_lat, center_lng, zoom, share_lat, share_lng, share_zoom, created_at, updated_at, tile_count)
+         VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, ?, 0)`
       )
       .bind(id, data.centerLat, data.centerLng, data.zoom, now, now)
       .run();
@@ -33,6 +33,9 @@ export class CanvasService {
       centerLat: data.centerLat,
       centerLng: data.centerLng,
       zoom: data.zoom,
+      shareLat: null,
+      shareLng: null,
+      shareZoom: null,
       createdAt: now,
       updatedAt: now,
       tileCount: 0,
@@ -43,7 +46,7 @@ export class CanvasService {
   async get(id: string): Promise<Canvas | null> {
     const result = await this.db
       .prepare(
-        `SELECT id, center_lat, center_lng, zoom, created_at, updated_at, tile_count
+        `SELECT id, center_lat, center_lng, zoom, share_lat, share_lng, share_zoom, created_at, updated_at, tile_count
          FROM canvas WHERE id = ?`
       )
       .bind(id)
@@ -52,6 +55,9 @@ export class CanvasService {
         center_lat: number;
         center_lng: number;
         zoom: number;
+        share_lat: number | null;
+        share_lng: number | null;
+        share_zoom: number | null;
         created_at: string;
         updated_at: string;
         tile_count: number;
@@ -64,6 +70,9 @@ export class CanvasService {
       centerLat: result.center_lat,
       centerLng: result.center_lng,
       zoom: result.zoom,
+      shareLat: result.share_lat,
+      shareLng: result.share_lng,
+      shareZoom: result.share_zoom,
       createdAt: result.created_at,
       updatedAt: result.updated_at,
       tileCount: result.tile_count,
@@ -83,12 +92,18 @@ export class CanvasService {
     const centerLng = data.centerLng ?? existing.centerLng;
     const zoom = data.zoom ?? existing.zoom;
 
+    // Handle share state update
+    const hasShareUpdate = data.shareLat !== undefined || data.shareLng !== undefined || data.shareZoom !== undefined;
+    const shareLat = hasShareUpdate ? (data.shareLat ?? existing.shareLat) : existing.shareLat;
+    const shareLng = hasShareUpdate ? (data.shareLng ?? existing.shareLng) : existing.shareLng;
+    const shareZoom = hasShareUpdate ? (data.shareZoom ?? existing.shareZoom) : existing.shareZoom;
+
     await this.db
       .prepare(
-        `UPDATE canvas SET center_lat = ?, center_lng = ?, zoom = ?, updated_at = ?
+        `UPDATE canvas SET center_lat = ?, center_lng = ?, zoom = ?, share_lat = ?, share_lng = ?, share_zoom = ?, updated_at = ?
          WHERE id = ?`
       )
-      .bind(centerLat, centerLng, zoom, now, id)
+      .bind(centerLat, centerLng, zoom, shareLat, shareLng, shareZoom, now, id)
       .run();
 
     return {
@@ -96,6 +111,9 @@ export class CanvasService {
       centerLat,
       centerLng,
       zoom,
+      shareLat,
+      shareLng,
+      shareZoom,
       updatedAt: now,
     };
   }

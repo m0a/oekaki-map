@@ -15,6 +15,9 @@ const updateCanvasSchema = z.object({
   centerLat: z.number().min(-90).max(90).optional(),
   centerLng: z.number().min(-180).max(180).optional(),
   zoom: z.number().int().min(1).max(19).optional(),
+  shareLat: z.number().min(-90).max(90).optional(),
+  shareLng: z.number().min(-180).max(180).optional(),
+  shareZoom: z.number().int().min(1).max(19).optional(),
 });
 
 // Canvas ID format: 21 characters (nanoid)

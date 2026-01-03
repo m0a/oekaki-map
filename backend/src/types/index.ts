@@ -4,6 +4,9 @@ export interface Canvas {
   centerLat: number;
   centerLng: number;
   zoom: number;
+  shareLat: number | null;
+  shareLng: number | null;
+  shareZoom: number | null;
   createdAt: string; // ISO8601
   updatedAt: string; // ISO8601
   tileCount: number;
@@ -46,6 +49,9 @@ export interface UpdateCanvasRequest {
   centerLat?: number | undefined;
   centerLng?: number | undefined;
   zoom?: number | undefined;
+  shareLat?: number | undefined;
+  shareLng?: number | undefined;
+  shareZoom?: number | undefined;
 }
 
 export interface GetTilesQuery {
