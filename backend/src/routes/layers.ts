@@ -105,8 +105,14 @@ layersRoutes.patch(
 
     const layerService = createLayerService(c.env);
 
+    // Filter out undefined values to satisfy exactOptionalPropertyTypes
+    const updates: { name?: string; order?: number; visible?: boolean } = {};
+    if (data.name !== undefined) updates.name = data.name;
+    if (data.order !== undefined) updates.order = data.order;
+    if (data.visible !== undefined) updates.visible = data.visible;
+
     try {
-      const layer = await layerService.update(canvasId, layerId, data);
+      const layer = await layerService.update(canvasId, layerId, updates);
 
       if (!layer) {
         return c.json(
