@@ -25,8 +25,9 @@ ENVIRONMENT = "production"
 port = 8787
 local_protocol = "http"
 
-# Preview environment (for main preview and PR previews)
+# Main preview environment
 [env.preview]
+name = "oekaki-map-main-preview"
 vars = { ENVIRONMENT = "preview" }
 
 [[env.preview.d1_databases]]

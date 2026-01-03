@@ -140,7 +140,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy Main Preview
-        run: cd backend && pnpm exec wrangler deploy --env preview --name oekaki-map-main-preview
+        run: cd backend && pnpm exec wrangler deploy --env preview
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -223,7 +223,7 @@ jobs:
       - name: Deploy PR Preview
         run: |
           cd backend
-          pnpm exec wrangler deploy --env preview --name oekaki-map-pr-${{ github.event.pull_request.number }}
+          pnpm exec wrangler deploy --config wrangler.pr-preview.toml --name oekaki-map-pr-${{ github.event.pull_request.number }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

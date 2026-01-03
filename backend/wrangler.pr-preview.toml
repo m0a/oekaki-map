@@ -1,0 +1,23 @@
+# PR Preview environment configuration
+# Worker name is set dynamically via --name flag
+
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Static assets (frontend build)
+assets = { directory = "../frontend/dist", binding = "ASSETS" }
+
+# Preview D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "oekaki-map-db-preview"
+database_id = "0ce6fa3b-4f36-42ee-844b-89fb1728c5e4"
+
+# Preview R2 Bucket binding
+[[r2_buckets]]
+binding = "TILES"
+bucket_name = "oekaki-map-tiles-preview"
+
+[vars]
+ENVIRONMENT = "preview"
