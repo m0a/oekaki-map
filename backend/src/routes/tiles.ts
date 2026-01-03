@@ -152,7 +152,7 @@ tilesRoutes.get('/:canvasId/:z/:x/:filename', async (c) => {
 
   const z = parseInt(zParam, 10);
   const x = parseInt(xParam, 10);
-  const y = parseInt(yMatch[1], 10);
+  const y = parseInt(yMatch[1] ?? '', 10);
 
   if (isNaN(z) || isNaN(x) || isNaN(y)) {
     return c.json(
