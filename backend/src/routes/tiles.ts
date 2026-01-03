@@ -142,7 +142,7 @@ tilesRoutes.get('/:canvasId/:z/:x/:filename', async (c) => {
   const filename = c.req.param('filename');
 
   // Parse y from filename (e.g., "103226.webp" -> 103226)
-  const yMatch = filename?.match(/^(\d+)\.webp$/);
+  const yMatch = filename.match(/^(\d+)\.webp$/);
   if (!zParam || !xParam || !yMatch) {
     return c.json(
       { error: 'INVALID_PARAMS', message: 'Missing or invalid tile coordinates' },
@@ -176,7 +176,7 @@ tilesRoutes.get('/:canvasId/:z/:x/:filename', async (c) => {
     return new Response(imageData, {
       headers: {
         'Content-Type': 'image/webp',
-        'Cache-Control': 'public, max-age=31536000',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
       },
     });
   } catch (error) {

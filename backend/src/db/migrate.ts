@@ -1,5 +1,5 @@
 // Database migration runner for D1
-export async function runMigrations(_db: D1Database): Promise<void> {
+export function runMigrations(_db: D1Database): void {
   // This is primarily used during local development
   // In production, migrations are run via wrangler d1 execute
   console.log('Migrations should be run via: pnpm db:migrate');

@@ -10,7 +10,7 @@ interface UseCanvasReturn {
   createCanvas: (position: MapPosition) => Promise<string>;
   loadCanvas: (canvasId: string) => Promise<void>;
   updatePosition: (position: MapPosition) => Promise<void>;
-  saveTiles: (tiles: Array<{ z: number; x: number; y: number; blob: Blob }>) => Promise<void>;
+  saveTiles: (tiles: Array<{ z: number; x: number; y: number; blob: Blob }>, canvasIdOverride?: string) => Promise<void>;
 }
 
 export function useCanvas(initialCanvasId?: string): UseCanvasReturn {
@@ -84,11 +84,14 @@ export function useCanvas(initialCanvasId?: string): UseCanvasReturn {
 
   // Save tiles
   const saveTiles = useCallback(
-    async (tilesToSave: Array<{ z: number; x: number; y: number; blob: Blob }>): Promise<void> => {
-      if (!canvas) return;
+    async (tilesToSave: Array<{ z: number; x: number; y: number; blob: Blob }>, canvasIdOverride?: string): Promise<void> => {
+      const canvasId = canvasIdOverride || canvas?.id;
+      if (!canvasId) {
+        return;
+      }
 
       try {
-        const { saved, canvas: updatedCanvas } = await api.tiles.save(canvas.id, tilesToSave);
+        const { saved, canvas: updatedCanvas } = await api.tiles.save(canvasId, tilesToSave);
 
         setCanvas(updatedCanvas);
 

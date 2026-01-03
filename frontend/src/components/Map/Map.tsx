@@ -4,7 +4,7 @@ import 'leaflet/dist/leaflet.css';
 import type { MapPosition } from '../../types';
 
 interface MapProps {
-  position: MapPosition;
+  position?: MapPosition;
   onPositionChange?: (position: MapPosition) => void;
   interactive?: boolean;
 }

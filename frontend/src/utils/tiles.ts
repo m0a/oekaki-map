@@ -77,7 +77,8 @@ async function extractTileFromCanvas(
   _tileY: number,
   tileBounds: L.LatLngBounds
 ): Promise<Blob | null> {
-  const canvasSize = canvas.width;
+  const canvasWidth = canvas.width;
+  const canvasHeight = canvas.height;
 
   // Create a temporary canvas for the tile
   const tileCanvas = document.createElement('canvas');
@@ -94,8 +95,8 @@ async function extractTileFromCanvas(
   const tileCenterLng = (tileBounds.getWest() + tileBounds.getEast()) / 2;
 
   // Calculate the pixel offset from canvas center to tile center at canvas zoom
-  const canvasCenterX = canvasSize / 2;
-  const canvasCenterY = canvasSize / 2;
+  const canvasCenterX = canvasWidth / 2;
+  const canvasCenterY = canvasHeight / 2;
 
   // Project both origins to get pixel offset at canvas zoom
   // Using Web Mercator projection
@@ -112,8 +113,8 @@ async function extractTileFromCanvas(
   const srcY = canvasCenterY + offsetY - srcTileSize / 2;
 
   // Check if source area is within canvas bounds and has content
-  if (srcX + srcTileSize < 0 || srcX > canvasSize ||
-      srcY + srcTileSize < 0 || srcY > canvasSize) {
+  if (srcX + srcTileSize < 0 || srcX > canvasWidth ||
+      srcY + srcTileSize < 0 || srcY > canvasHeight) {
     return null;
   }
 
@@ -123,8 +124,8 @@ async function extractTileFromCanvas(
 
   const checkX = Math.max(0, Math.floor(srcX));
   const checkY = Math.max(0, Math.floor(srcY));
-  const checkWidth = Math.min(Math.ceil(srcTileSize), canvasSize - checkX);
-  const checkHeight = Math.min(Math.ceil(srcTileSize), canvasSize - checkY);
+  const checkWidth = Math.min(Math.ceil(srcTileSize), canvasWidth - checkX);
+  const checkHeight = Math.min(Math.ceil(srcTileSize), canvasHeight - checkY);
 
   if (checkWidth <= 0 || checkHeight <= 0) return null;
 
@@ -176,9 +177,8 @@ export function loadTilesToCanvas(
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  const canvasSize = canvas.width;
-  const canvasCenterX = canvasSize / 2;
-  const canvasCenterY = canvasSize / 2;
+  const canvasCenterX = canvas.width / 2;
+  const canvasCenterY = canvas.height / 2;
 
   const originPoint = projectToPixel(canvasOrigin.lat, canvasOrigin.lng, canvasZoom);
 

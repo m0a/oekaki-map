@@ -122,6 +122,20 @@ export function Toolbar({
           Draw
         </button>
         <button
+          onClick={() => onModeChange('erase')}
+          style={{
+            padding: '8px 12px',
+            borderRadius: 8,
+            backgroundColor: mode === 'erase' ? '#007AFF' : '#f0f0f0',
+            color: mode === 'erase' ? 'white' : '#333',
+            border: 'none',
+            cursor: 'pointer',
+            fontWeight: mode === 'erase' ? 'bold' : 'normal',
+          }}
+        >
+          Erase
+        </button>
+        <button
           onClick={() => onModeChange('navigate')}
           style={{
             padding: '8px 12px',

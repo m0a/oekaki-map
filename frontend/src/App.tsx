@@ -68,11 +68,12 @@ export function App({ canvasId }: AppProps) {
   // Handle stroke end - save canvas state
   const handleStrokeEnd = useCallback(
     async (canvasElement: HTMLCanvasElement, bounds: L.LatLngBounds, zoom: number) => {
-      // Create canvas if needed
-      if (!canvas.canvas) {
+      // Create canvas if needed, capture ID for later use
+      let currentCanvasId = canvas.canvas?.id;
+      if (!currentCanvasId) {
         if (!mapPosition) return;
         try {
-          await canvas.createCanvas(mapPosition);
+          currentCanvasId = await canvas.createCanvas(mapPosition);
         } catch (err) {
           console.error('Failed to create canvas:', err);
           return;
@@ -80,27 +81,30 @@ export function App({ canvasId }: AppProps) {
       }
 
       // Extract and save tiles
-      if (canvasOriginRef.current) {
-        autoSave.scheduleSave(async () => {
-          try {
-            const tiles = await extractTilesFromCanvas(
-              canvasElement,
-              canvasOriginRef.current!,
-              canvasZoomRef.current,
-              Math.round(zoom),
-              bounds
-            );
+      // Use bounds center as canvas origin (viewport-sized canvas is centered on map center)
+      const boundsCenter = bounds.getCenter();
+      const targetZoom = Math.round(zoom);
 
-            if (tiles.length > 0) {
-              await canvas.saveTiles(tiles);
-              console.log(`Saved ${tiles.length} tiles`);
-            }
-          } catch (err) {
-            console.error('Failed to save tiles:', err);
-            throw err;
+      // Capture canvasId in closure to ensure it's available when the save runs
+      const canvasIdToSave = currentCanvasId;
+      autoSave.scheduleSave(async () => {
+        try {
+          const tiles = await extractTilesFromCanvas(
+            canvasElement,
+            boundsCenter,
+            zoom,
+            targetZoom,
+            bounds
+          );
+
+          if (tiles.length > 0) {
+            await canvas.saveTiles(tiles, canvasIdToSave);
           }
-        });
-      }
+        } catch (err) {
+          console.error('Failed to save tiles:', err);
+          throw err;
+        }
+      });
     },
     [canvas, mapPosition, autoSave]
   );
@@ -146,6 +150,7 @@ export function App({ canvasId }: AppProps) {
         onCanvasOriginInit={handleCanvasOriginInit}
         tiles={canvas.tiles}
         canvasId={canvas.canvas?.id}
+        onFlushSave={autoSave.flushSave}
       />
 
       {/* Toolbar */}

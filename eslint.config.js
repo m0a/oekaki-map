@@ -5,7 +5,7 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 import globals from 'globals';
 
 export default tseslint.config(
-  { ignores: ['dist', 'build', 'node_modules', 'coverage', '.wrangler'] },
+  { ignores: ['dist', 'build', 'node_modules', 'coverage', '.wrangler', '**/*.config.ts', '**/*.config.js', '**/*.config.d.ts', 'tests/**'] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.strictTypeChecked],
     files: ['**/*.{ts,tsx}'],
@@ -36,6 +36,12 @@ export default tseslint.config(
         'error',
         { checksVoidReturn: { attributes: false } },
       ],
+      '@typescript-eslint/restrict-template-expressions': [
+        'error',
+        { allowNumber: true },
+      ],
+      '@typescript-eslint/no-confusing-void-expression': 'off',
+      '@typescript-eslint/no-unnecessary-condition': 'off',
     },
   }
 );

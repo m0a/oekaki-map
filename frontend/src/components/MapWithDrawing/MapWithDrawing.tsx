@@ -12,13 +12,14 @@ interface TileInfo {
 }
 
 interface MapWithDrawingProps {
-  position: MapPosition;
+  position?: MapPosition;
   onPositionChange?: (position: MapPosition) => void;
   drawingState: DrawingState;
   onStrokeEnd?: (canvas: HTMLCanvasElement, bounds: L.LatLngBounds, zoom: number) => void;
   onCanvasOriginInit?: (origin: L.LatLng, zoom: number) => void;
   tiles?: TileInfo[] | undefined;
   canvasId?: string | undefined;
+  onFlushSave?: () => Promise<void>;
 }
 
 // Default position: Tokyo, Japan
@@ -27,10 +28,6 @@ const DEFAULT_POSITION: MapPosition = {
   lng: 139.7671,
   zoom: 18,
 };
-
-// Canvas size (covers a large area for drawing)
-// At zoom 18, 1 pixel ≈ 0.6m, so 4096px ≈ 2.5km coverage
-const CANVAS_SIZE = 4096;
 
 // Drawable zoom range
 const MIN_DRAWABLE_ZOOM = 16;
@@ -44,11 +41,11 @@ export function MapWithDrawing({
   onCanvasOriginInit,
   tiles,
   canvasId,
+  onFlushSave,
 }: MapWithDrawingProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const canvasContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Current zoom level state
   const [currentZoom, setCurrentZoom] = useState(position.zoom);
@@ -56,9 +53,9 @@ export function MapWithDrawing({
 
   // Drawing state
   const isDrawingRef = useRef(false);
-  const lastPointRef = useRef<L.Point | null>(null);
+  const lastPointRef = useRef<{ x: number; y: number } | null>(null);
 
-  // Canvas origin in lat/lng (set when map initializes)
+  // Canvas origin (updated on map move)
   const canvasOriginRef = useRef<L.LatLng | null>(null);
   const canvasZoomRef = useRef<number>(18);
 
@@ -68,63 +65,19 @@ export function MapWithDrawing({
     return canvasRef.current.getContext('2d');
   }, []);
 
-  // Update canvas position based on map state
-  const updateCanvasTransform = useCallback(() => {
-    if (!mapRef.current || !canvasContainerRef.current || !canvasOriginRef.current) return;
-
-    const map = mapRef.current;
-    const origin = canvasOriginRef.current;
-    const originZoom = canvasZoomRef.current;
-    const currentZoom = map.getZoom();
-
-    // Use layerPoint for correct positioning within pane
-    const originPoint = map.latLngToLayerPoint(origin);
-
-    // Calculate scale based on zoom difference
-    const scale = Math.pow(2, currentZoom - originZoom);
-
-    // Position the canvas container (center of canvas at origin)
-    const offsetX = originPoint.x - (CANVAS_SIZE * scale) / 2;
-    const offsetY = originPoint.y - (CANVAS_SIZE * scale) / 2;
-
-    canvasContainerRef.current.style.left = offsetX + 'px';
-    canvasContainerRef.current.style.top = offsetY + 'px';
-    canvasContainerRef.current.style.transform = `scale(${scale})`;
-    canvasContainerRef.current.style.transformOrigin = '0 0';
-  }, []);
-
-  // Convert screen point to canvas point
-  const screenToCanvas = useCallback((clientX: number, clientY: number): L.Point | null => {
-    if (!mapRef.current || !canvasRef.current || !canvasOriginRef.current) return null;
-
-    const map = mapRef.current;
+  // Convert screen point to canvas point (simple: canvas = viewport)
+  const screenToCanvas = useCallback((clientX: number, clientY: number): { x: number; y: number } | null => {
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return null;
 
-    // Get container point
-    const containerPoint = L.point(clientX - rect.left, clientY - rect.top);
-
-    // Convert to lat/lng
-    const latLng = map.containerPointToLatLng(containerPoint);
-
-    // Get the origin point at the original zoom level using project()
-    // This gives us the world pixel coordinates at that zoom level
-    const origin = canvasOriginRef.current;
-    const originZoom = canvasZoomRef.current;
-
-    // Project to world pixels at the canvas zoom level
-    const originPixel = map.project(origin, originZoom);
-    const pointPixel = map.project(latLng, originZoom);
-
-    // Canvas center is at origin, so offset from center
-    const canvasX = CANVAS_SIZE / 2 + (pointPixel.x - originPixel.x);
-    const canvasY = CANVAS_SIZE / 2 + (pointPixel.y - originPixel.y);
-
-    return L.point(canvasX, canvasY);
+    return {
+      x: clientX - rect.left,
+      y: clientY - rect.top,
+    };
   }, []);
 
   // Draw a line on the canvas
-  const drawLine = useCallback((from: L.Point, to: L.Point) => {
+  const drawLine = useCallback((from: { x: number; y: number }, to: { x: number; y: number }) => {
     const ctx = getContext();
     if (!ctx) return;
 
@@ -144,6 +97,81 @@ export function MapWithDrawing({
 
     ctx.stroke();
   }, [getContext, drawingState.color, drawingState.thickness, drawingState.mode]);
+
+  // Clear canvas and reload tiles for current view
+  const reloadTilesForCurrentView = useCallback(async () => {
+    if (!canvasRef.current || !mapRef.current || !canvasId) return;
+
+    // Flush any pending saves before reloading
+    if (onFlushSave) {
+      await onFlushSave();
+    }
+
+    const map = mapRef.current;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Update canvas origin to current center
+    const center = map.getCenter();
+    const zoom = map.getZoom();
+    canvasOriginRef.current = center;
+    canvasZoomRef.current = zoom;
+
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Get visible bounds
+    const bounds = map.getBounds();
+    const nw = bounds.getNorthWest();
+    const se = bounds.getSouthEast();
+
+    // Fetch tiles for all drawable zoom levels (16-19) to handle zoom changes
+    const allTileImages: Array<{ z: number; x: number; y: number; image: HTMLImageElement }> = [];
+
+    try {
+      for (let tileZoom = MIN_DRAWABLE_ZOOM; tileZoom <= MAX_DRAWABLE_ZOOM; tileZoom++) {
+        // Calculate tile range for this zoom level
+        const n = Math.pow(2, tileZoom);
+        const minX = Math.floor(((nw.lng + 180) / 360) * n);
+        const maxX = Math.floor(((se.lng + 180) / 360) * n);
+        const nwLatRad = (nw.lat * Math.PI) / 180;
+        const seLatRad = (se.lat * Math.PI) / 180;
+        const minY = Math.floor(((1 - Math.log(Math.tan(nwLatRad) + 1 / Math.cos(nwLatRad)) / Math.PI) / 2) * n);
+        const maxY = Math.floor(((1 - Math.log(Math.tan(seLatRad) + 1 / Math.cos(seLatRad)) / Math.PI) / 2) * n);
+
+        const response = await api.tiles.getForArea(canvasId, tileZoom, minX, maxX, minY, maxY);
+
+        if (response.tiles && response.tiles.length > 0) {
+          // Load tile images
+          for (const tile of response.tiles) {
+            // Add cache buster to ensure we get the latest version
+            const imageUrl = api.tiles.getImageUrl(canvasId, tile.z, tile.x, tile.y) + `?t=${Date.now()}`;
+            try {
+              const image = new Image();
+              image.crossOrigin = 'anonymous';
+              await new Promise<void>((resolve, reject) => {
+                image.onload = () => resolve();
+                image.onerror = () => reject(new Error(`Failed to load tile`));
+                image.src = imageUrl;
+              });
+              allTileImages.push({ ...tile, image });
+            } catch {
+              // Skip failed tiles
+            }
+          }
+        }
+      }
+
+      if (allTileImages.length > 0 && canvasOriginRef.current) {
+        // Use current zoom for tile loading - loadTilesToCanvas handles scaling
+        const roundedZoom = Math.round(zoom);
+        loadTilesToCanvas(canvas, canvasOriginRef.current, roundedZoom, allTileImages);
+      }
+    } catch (err) {
+      console.error('Failed to reload tiles:', err);
+    }
+  }, [canvasId, onFlushSave]);
 
   // Handle pointer down
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
@@ -173,7 +201,7 @@ export function MapWithDrawing({
         ctx.fill();
       }
     }
-  }, [drawingState, screenToCanvas, getContext, isDrawableZoom]);
+  }, [drawingState, screenToCanvas, getContext, isDrawableZoom, currentZoom]);
 
   // Handle pointer move
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
@@ -205,6 +233,20 @@ export function MapWithDrawing({
     }
   }, [onStrokeEnd]);
 
+  // Update canvas size to match container
+  const updateCanvasSize = useCallback(() => {
+    if (!canvasRef.current || !containerRef.current) return;
+
+    const rect = containerRef.current.getBoundingClientRect();
+    const canvas = canvasRef.current;
+
+    // Only resize if dimensions changed
+    if (canvas.width !== rect.width || canvas.height !== rect.height) {
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+    }
+  }, []);
+
   // Initialize map and canvas
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -226,63 +268,61 @@ export function MapWithDrawing({
 
     mapRef.current = map;
 
-    // Set canvas origin to actual map center (after map is created)
-    const center = map.getCenter();
-    canvasOriginRef.current = center;
+    // Set initial canvas origin
+    canvasOriginRef.current = map.getCenter();
     canvasZoomRef.current = map.getZoom();
 
     // Notify parent about canvas origin
     onCanvasOriginInit?.(canvasOriginRef.current, canvasZoomRef.current);
 
-    // Create canvas container in overlay pane
-    const overlayPane = map.getPane('overlayPane');
-    if (overlayPane) {
-      const canvasContainer = document.createElement('div');
-      canvasContainer.style.position = 'absolute';
-      canvasContainer.style.width = CANVAS_SIZE + 'px';
-      canvasContainer.style.height = CANVAS_SIZE + 'px';
-      canvasContainer.style.pointerEvents = 'none';
-      canvasContainer.style.zIndex = '400';
+    // Create canvas element (positioned over the map)
+    const canvas = document.createElement('canvas');
+    const rect = containerRef.current.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    canvas.style.position = 'absolute';
+    canvas.style.top = '0';
+    canvas.style.left = '0';
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    canvas.style.pointerEvents = 'none';
+    canvas.style.zIndex = '400';
 
-      const canvas = document.createElement('canvas');
-      canvas.width = CANVAS_SIZE;
-      canvas.height = CANVAS_SIZE;
-      canvas.style.width = '100%';
-      canvas.style.height = '100%';
+    containerRef.current.appendChild(canvas);
+    canvasRef.current = canvas;
 
-      canvasContainer.appendChild(canvas);
-      overlayPane.appendChild(canvasContainer);
-
-      canvasRef.current = canvas;
-      canvasContainerRef.current = canvasContainer;
-
-      // Initial transform
-      updateCanvasTransform();
-    }
-
-    // Update canvas transform on map move/zoom
-    map.on('move', updateCanvasTransform);
-    map.on('zoom', updateCanvasTransform);
+    // Update zoom state
     map.on('zoomend', () => {
-      updateCanvasTransform();
       setCurrentZoom(map.getZoom());
     });
-    map.on('viewreset', updateCanvasTransform);
+
+    // On map move end, update position
     map.on('moveend', () => {
       const center = map.getCenter();
       const zoom = map.getZoom();
       setCurrentZoom(zoom);
+
+      // Update canvas origin
+      canvasOriginRef.current = center;
+      canvasZoomRef.current = zoom;
+
       onPositionChange?.({ lat: center.lat, lng: center.lng, zoom });
     });
 
+    // Handle window resize
+    const handleResize = () => {
+      updateCanvasSize();
+    };
+    window.addEventListener('resize', handleResize);
+
     return () => {
-      if (canvasContainerRef.current && canvasContainerRef.current.parentNode) {
-        canvasContainerRef.current.parentNode.removeChild(canvasContainerRef.current);
+      window.removeEventListener('resize', handleResize);
+      if (canvasRef.current && canvasRef.current.parentNode) {
+        canvasRef.current.parentNode.removeChild(canvasRef.current);
       }
       map.remove();
       mapRef.current = null;
       canvasRef.current = null;
-      canvasContainerRef.current = null;
     };
   }, []);
 
@@ -305,27 +345,50 @@ export function MapWithDrawing({
     }
   }, [drawingState.mode]);
 
+  // Reload tiles when switching to navigate mode (after drawing)
+  useEffect(() => {
+    if (drawingState.mode === 'navigate' && canvasId) {
+      void reloadTilesForCurrentView();
+    }
+  }, [drawingState.mode, canvasId, reloadTilesForCurrentView]);
+
+  // Reload tiles after map move in navigate mode
+  useEffect(() => {
+    if (!mapRef.current || drawingState.mode !== 'navigate' || !canvasId) return;
+
+    const handleMoveEnd = () => {
+      void reloadTilesForCurrentView();
+    };
+
+    const map = mapRef.current;
+    map.on('moveend', handleMoveEnd);
+
+    return () => {
+      map.off('moveend', handleMoveEnd);
+    };
+  }, [drawingState.mode, canvasId, reloadTilesForCurrentView]);
+
   // Update position from props
   useEffect(() => {
     if (!mapRef.current) return;
 
     const currentCenter = mapRef.current.getCenter();
-    const currentZoom = mapRef.current.getZoom();
+    const currentMapZoom = mapRef.current.getZoom();
 
     if (
       Math.abs(currentCenter.lat - position.lat) > 0.0001 ||
       Math.abs(currentCenter.lng - position.lng) > 0.0001 ||
-      currentZoom !== position.zoom
+      currentMapZoom !== position.zoom
     ) {
       mapRef.current.setView([position.lat, position.lng], position.zoom, { animate: false });
     }
   }, [position.lat, position.lng, position.zoom]);
 
-  // Load tiles when tiles and canvasId are provided
+  // Load initial tiles when tiles and canvasId are provided
   useEffect(() => {
     if (!tiles || tiles.length === 0 || !canvasId || !canvasRef.current || !canvasOriginRef.current) return;
 
-    const loadTiles = async () => {
+    const loadInitialTiles = async () => {
       const tileImages: Array<{ z: number; x: number; y: number; image: HTMLImageElement }> = [];
 
       for (const tile of tiles) {
@@ -345,11 +408,13 @@ export function MapWithDrawing({
       }
 
       if (tileImages.length > 0 && canvasRef.current && canvasOriginRef.current) {
-        loadTilesToCanvas(canvasRef.current, canvasOriginRef.current, canvasZoomRef.current, tileImages);
+        // Use rounded zoom for tile loading (tiles are stored at integer zoom levels)
+        const roundedZoom = Math.round(canvasZoomRef.current);
+        loadTilesToCanvas(canvasRef.current, canvasOriginRef.current, roundedZoom, tileImages);
       }
     };
 
-    loadTiles();
+    void loadInitialTiles();
   }, [tiles, canvasId]);
 
   const cursor = drawingState.mode === 'navigate' ? 'grab' : !isDrawableZoom ? 'not-allowed' : drawingState.mode === 'draw' ? 'crosshair' : 'cell';
@@ -391,7 +456,7 @@ export function MapWithDrawing({
         onPointerLeave={handlePointerUp}
         onPointerCancel={handlePointerUp}
       />
-      {/* Zoom level warning */}
+      {/* Warning messages */}
       {drawingState.mode !== 'navigate' && !isDrawableZoom && (
         <div
           style={{

@@ -6,6 +6,7 @@ interface UseAutoSaveReturn {
   error: string | null;
   scheduleSave: (saveFn: () => Promise<void>) => void;
   cancelSave: () => void;
+  flushSave: () => Promise<void>;
 }
 
 const DEBOUNCE_DELAY = 500; // 500ms debounce per spec
@@ -66,11 +67,23 @@ export function useAutoSave(): UseAutoSaveReturn {
     [cancelSave, executeSave]
   );
 
+  // Immediately execute any pending save (flush the queue)
+  const flushSave = useCallback(async () => {
+    if (timeoutRef.current !== null) {
+      window.clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    if (pendingSaveFnRef.current) {
+      await executeSave();
+    }
+  }, [executeSave]);
+
   return {
     isSaving,
     lastSaved,
     error,
     scheduleSave,
     cancelSave,
+    flushSave,
   };
 }

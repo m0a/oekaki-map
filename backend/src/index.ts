@@ -4,6 +4,7 @@ import { logger } from 'hono/logger';
 import type { Env } from './types/index';
 import { canvasRoutes } from './routes/canvas';
 import { tilesRoutes } from './routes/tiles';
+import { logsRoutes } from './routes/logs';
 
 // Extended environment with static assets
 interface ExtendedEnv extends Env {
@@ -30,17 +31,11 @@ app.get('/api/health', (c) => {
   return c.json({ status: 'ok', service: 'oekaki-map-api' });
 });
 
-// Debug log endpoint
-app.post('/api/debug', async (c) => {
-  const body = await c.req.json();
-  console.log('[CLIENT DEBUG]', JSON.stringify(body, null, 2));
-  return c.json({ ok: true });
-});
-
 // API routes
 app.route('/api/canvas', canvasRoutes);
 app.route('/api/canvas', tilesRoutes); // /api/canvas/:id/tiles
 app.route('/api/tiles', tilesRoutes);  // /api/tiles/:canvasId/:z/:x/:y.webp
+app.route('/api/logs', logsRoutes);    // /api/logs/error, /api/logs/debug
 
 // Serve static files for SPA
 // Handle canvas routes for SPA (client-side routing)

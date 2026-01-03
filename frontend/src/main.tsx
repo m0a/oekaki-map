@@ -1,7 +1,11 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { setupGlobalErrorHandler } from './lib/errorLogger';
 import './styles/global.css';
+
+// Setup global error handler
+setupGlobalErrorHandler();
 
 // Extract canvas ID from URL path: /c/:canvasId
 function getCanvasIdFromUrl(): string | undefined {
