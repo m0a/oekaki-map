@@ -1,11 +1,13 @@
-import { useCallback, useState, useRef, useEffect } from 'react';
+import { useCallback, useState, useRef, useEffect, useMemo } from 'react';
 import L from 'leaflet';
 import { MapWithDrawing, DEFAULT_POSITION } from './components/MapWithDrawing/MapWithDrawing';
 import { Toolbar } from './components/Toolbar/Toolbar';
+import { LayerPanel } from './components/LayerPanel';
 import { useDrawing } from './hooks/useDrawing';
 import { useCanvas } from './hooks/useCanvas';
 import { useAutoSave } from './hooks/useAutoSave';
 import { useUndoRedo } from './hooks/useUndoRedo';
+import { useLayers } from './hooks/useLayers';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { extractTilesFromCanvas } from './utils/tiles';
 import type { MapPosition, StrokeData } from './types';
@@ -17,6 +19,7 @@ interface AppProps {
 export function App({ canvasId }: AppProps) {
   const [mapPosition, setMapPosition] = useState<MapPosition | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isLayerPanelOpen, setIsLayerPanelOpen] = useState(false);
 
   // Canvas origin tracking
   const canvasOriginRef = useRef<L.LatLng | null>(null);
@@ -27,6 +30,7 @@ export function App({ canvasId }: AppProps) {
   const canvas = useCanvas(canvasId);
   const autoSave = useAutoSave();
   const undoRedo = useUndoRedo();
+  const layers = useLayers();
 
   // Keyboard shortcuts for undo/redo
   useKeyboardShortcuts({
@@ -54,6 +58,63 @@ export function App({ canvasId }: AppProps) {
       setIsInitialized(true);
     }
   }, [canvas.canvas, canvas.isLoading, canvasId, isInitialized]);
+
+  // Load layers when canvas is available
+  useEffect(() => {
+    if (canvas.canvas?.id) {
+      layers.loadLayers(canvas.canvas.id);
+    }
+  }, [canvas.canvas?.id, layers.loadLayers]);
+
+  // Create default layer if canvas has no layers
+  useEffect(() => {
+    if (canvas.canvas?.id && layers.layers.length === 0 && !layers.isLoading) {
+      layers.createDefaultLayerIfNeeded(canvas.canvas.id);
+    }
+  }, [canvas.canvas?.id, layers.layers.length, layers.isLoading, layers.createDefaultLayerIfNeeded]);
+
+  // Layer panel handlers
+  const handleToggleLayerPanel = useCallback(() => {
+    setIsLayerPanelOpen((prev) => !prev);
+  }, []);
+
+  const handleCreateLayer = useCallback(async () => {
+    if (canvas.canvas?.id) {
+      await layers.createLayer(canvas.canvas.id);
+    }
+  }, [canvas.canvas?.id, layers.createLayer]);
+
+  const handleToggleLayerVisibility = useCallback(async (layerId: string) => {
+    if (canvas.canvas?.id) {
+      await layers.toggleLayerVisibility(canvas.canvas.id, layerId);
+    }
+  }, [canvas.canvas?.id, layers.toggleLayerVisibility]);
+
+  const handleDeleteLayer = useCallback(async (layerId: string) => {
+    if (canvas.canvas?.id) {
+      const success = await layers.deleteLayer(canvas.canvas.id, layerId);
+      if (success) {
+        undoRedo.removeStrokesForLayer(layerId);
+      }
+    }
+  }, [canvas.canvas?.id, layers.deleteLayer, undoRedo.removeStrokesForLayer]);
+
+  const handleRenameLayer = useCallback(async (layerId: string, newName: string) => {
+    if (canvas.canvas?.id) {
+      await layers.updateLayer(canvas.canvas.id, layerId, { name: newName });
+    }
+  }, [canvas.canvas?.id, layers.updateLayer]);
+
+  const handleReorderLayers = useCallback(async (layerId: string, newOrder: number) => {
+    if (canvas.canvas?.id) {
+      await layers.reorderLayers(canvas.canvas.id, layerId, newOrder);
+    }
+  }, [canvas.canvas?.id, layers.reorderLayers]);
+
+  // Compute visible layer IDs for filtering strokes
+  const visibleLayerIds = useMemo(() => {
+    return layers.layers.filter((l) => l.visible).map((l) => l.id);
+  }, [layers.layers]);
 
   // Handle map position changes
   const handlePositionChange = useCallback(
@@ -168,6 +229,8 @@ export function App({ canvasId }: AppProps) {
         canvasId={canvas.canvas?.id}
         onFlushSave={autoSave.flushSave}
         strokes={undoRedo.strokes}
+        activeLayerId={layers.activeLayerId}
+        visibleLayerIds={visibleLayerIds}
       />
 
       {/* Toolbar */}
@@ -182,7 +245,25 @@ export function App({ canvasId }: AppProps) {
         canRedo={undoRedo.canRedo}
         onUndo={undoRedo.undo}
         onRedo={undoRedo.redo}
+        isLayerPanelOpen={isLayerPanelOpen}
+        onToggleLayerPanel={handleToggleLayerPanel}
       />
+
+      {/* Layer panel */}
+      {isLayerPanelOpen && (
+        <LayerPanel
+          layers={layers.layers}
+          activeLayerId={layers.activeLayerId}
+          canCreateLayer={layers.canCreateLayer}
+          onSelectLayer={layers.selectLayer}
+          onCreateLayer={handleCreateLayer}
+          onToggleVisibility={handleToggleLayerVisibility}
+          onDeleteLayer={handleDeleteLayer}
+          onRenameLayer={handleRenameLayer}
+          onReorderLayers={handleReorderLayers}
+          onClose={handleToggleLayerPanel}
+        />
+      )}
 
       {/* Save status indicator */}
       {autoSave.isSaving && (

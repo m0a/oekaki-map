@@ -18,6 +18,12 @@ interface UseUndoRedoReturn {
   redo: () => void;
   /** Clear all history */
   clear: () => void;
+  /** Get strokes for a specific layer */
+  getStrokesForLayer: (layerId: string) => StrokeData[];
+  /** Get strokes for visible layers */
+  getStrokesForVisibleLayers: (visibleLayerIds: string[]) => StrokeData[];
+  /** Remove all strokes for a specific layer (when layer is deleted) */
+  removeStrokesForLayer: (layerId: string) => void;
 }
 
 export function useUndoRedo(): UseUndoRedoReturn {
@@ -61,6 +67,19 @@ export function useUndoRedo(): UseUndoRedoReturn {
     setRedoStack([]);
   }, []);
 
+  const getStrokesForLayer = useCallback((layerId: string): StrokeData[] => {
+    return undoStack.filter((stroke) => stroke.layerId === layerId);
+  }, [undoStack]);
+
+  const getStrokesForVisibleLayers = useCallback((visibleLayerIds: string[]): StrokeData[] => {
+    return undoStack.filter((stroke) => visibleLayerIds.includes(stroke.layerId));
+  }, [undoStack]);
+
+  const removeStrokesForLayer = useCallback((layerId: string) => {
+    setUndoStack((prev) => prev.filter((stroke) => stroke.layerId !== layerId));
+    setRedoStack((prev) => prev.filter((stroke) => stroke.layerId !== layerId));
+  }, []);
+
   return {
     strokes: undoStack,
     canUndo: undoStack.length > 0,
@@ -69,5 +88,8 @@ export function useUndoRedo(): UseUndoRedoReturn {
     undo,
     redo,
     clear,
+    getStrokesForLayer,
+    getStrokesForVisibleLayers,
+    removeStrokesForLayer,
   };
 }

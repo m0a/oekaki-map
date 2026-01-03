@@ -1,0 +1,259 @@
+openapi: 3.0.3
+info:
+  title: Oekaki Map Layers API
+  description: レイヤー構造機能のAPI仕様
+  version: 1.0.0
+
+servers:
+  - url: /api
+    description: API base path
+
+paths:
+  /canvas/{canvasId}/layers:
+    get:
+      summary: レイヤー一覧取得
+      description: 指定キャンバスの全レイヤーをorder順で取得
+      operationId: getLayers
+      tags:
+        - Layers
+      parameters:
+        - $ref: '#/components/parameters/canvasId'
+      responses:
+        '200':
+          description: レイヤー一覧
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetLayersResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      summary: レイヤー作成
+      description: 新しいレイヤーを作成（最大10個まで）
+      operationId: createLayer
+      tags:
+        - Layers
+      parameters:
+        - $ref: '#/components/parameters/canvasId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLayerRequest'
+      responses:
+        '201':
+          description: 作成されたレイヤー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateLayerResponse'
+        '400':
+          description: レイヤー数上限（10）に達している
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /canvas/{canvasId}/layers/{layerId}:
+    patch:
+      summary: レイヤー更新
+      description: レイヤーの名前、順序、表示状態を更新
+      operationId: updateLayer
+      tags:
+        - Layers
+      parameters:
+        - $ref: '#/components/parameters/canvasId'
+        - $ref: '#/components/parameters/layerId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateLayerRequest'
+      responses:
+        '200':
+          description: 更新されたレイヤー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateLayerResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: レイヤー削除
+      description: レイヤーと関連するタイルを削除（最後の1つは削除不可）
+      operationId: deleteLayer
+      tags:
+        - Layers
+      parameters:
+        - $ref: '#/components/parameters/canvasId'
+        - $ref: '#/components/parameters/layerId'
+      responses:
+        '204':
+          description: 削除成功
+        '400':
+          description: 最後のレイヤーは削除不可
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  parameters:
+    canvasId:
+      name: canvasId
+      in: path
+      required: true
+      description: キャンバスID (nanoid, 21文字)
+      schema:
+        type: string
+        minLength: 21
+        maxLength: 21
+
+    layerId:
+      name: layerId
+      in: path
+      required: true
+      description: レイヤーID (nanoid, 21文字)
+      schema:
+        type: string
+        minLength: 21
+        maxLength: 21
+
+  schemas:
+    Layer:
+      type: object
+      required:
+        - id
+        - canvasId
+        - name
+        - order
+        - visible
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          description: レイヤーID
+          example: "abc123def456ghi789012"
+        canvasId:
+          type: string
+          description: 所属キャンバスID
+        name:
+          type: string
+          description: レイヤー名
+          maxLength: 50
+          example: "レイヤー 1"
+        order:
+          type: integer
+          description: 重ね順（0が最背面）
+          minimum: 0
+          example: 0
+        visible:
+          type: boolean
+          description: 表示/非表示状態
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+          description: 作成日時 (ISO8601)
+        updatedAt:
+          type: string
+          format: date-time
+          description: 更新日時 (ISO8601)
+
+    CreateLayerRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: レイヤー名（省略時は自動生成）
+          maxLength: 50
+          example: "背景"
+
+    UpdateLayerRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: 新しいレイヤー名
+          maxLength: 50
+        order:
+          type: integer
+          description: 新しい重ね順
+          minimum: 0
+        visible:
+          type: boolean
+          description: 新しい表示状態
+
+    GetLayersResponse:
+      type: object
+      required:
+        - layers
+      properties:
+        layers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Layer'
+          description: レイヤー一覧（order順）
+
+    CreateLayerResponse:
+      type: object
+      required:
+        - layer
+      properties:
+        layer:
+          $ref: '#/components/schemas/Layer'
+
+    UpdateLayerResponse:
+      type: object
+      required:
+        - layer
+      properties:
+        layer:
+          $ref: '#/components/schemas/Layer'
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: エラーコード
+          example: "MAX_LAYERS_EXCEEDED"
+        message:
+          type: string
+          description: エラーメッセージ
+          example: "レイヤー数の上限（10）に達しています"
+
+  responses:
+    NotFound:
+      description: リソースが見つからない
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "NOT_FOUND"
+            message: "キャンバスが見つかりません"
+
+    BadRequest:
+      description: リクエストが不正
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "VALIDATION_ERROR"
+            message: "レイヤー名は50文字以内で指定してください"

@@ -21,6 +21,8 @@ interface MapWithDrawingProps {
   canvasId?: string | undefined;
   onFlushSave?: () => Promise<void>;
   strokes?: StrokeData[];
+  activeLayerId?: string | null;
+  visibleLayerIds?: string[];
 }
 
 // Default position: Tokyo, Japan
@@ -44,6 +46,8 @@ export function MapWithDrawing({
   canvasId,
   onFlushSave,
   strokes,
+  activeLayerId,
+  visibleLayerIds,
 }: MapWithDrawingProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -265,6 +269,7 @@ export function MapWithDrawing({
       // Create stroke data for undo/redo (using geographic coordinates)
       const strokeData: StrokeData = {
         id: crypto.randomUUID(),
+        layerId: activeLayerId || 'default',
         points: [...currentStrokePointsRef.current],
         color: drawingState.color,
         thickness: drawingState.thickness,
@@ -277,7 +282,7 @@ export function MapWithDrawing({
     }
 
     currentStrokePointsRef.current = [];
-  }, [onStrokeEnd, drawingState.color, drawingState.thickness, drawingState.mode]);
+  }, [onStrokeEnd, drawingState.color, drawingState.thickness, drawingState.mode, activeLayerId]);
 
   // Update canvas size to match container
   const updateCanvasSize = useCallback(() => {
@@ -442,7 +447,7 @@ export function MapWithDrawing({
   }, [tiles, canvasId]);
 
   // Redraw strokes from history (for undo/redo)
-  const redrawStrokes = useCallback((strokesData: StrokeData[]) => {
+  const redrawStrokes = useCallback((strokesData: StrokeData[], visibleLayers?: string[]) => {
     const ctx = getContext();
     if (!ctx || !canvasRef.current || !mapRef.current) return;
 
@@ -451,9 +456,12 @@ export function MapWithDrawing({
     // Clear canvas
     ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
 
-    // Redraw each stroke
+    // Redraw each stroke (filter by visible layers if provided)
     for (const stroke of strokesData) {
       if (stroke.points.length === 0) continue;
+
+      // Skip strokes from hidden layers
+      if (visibleLayers && !visibleLayers.includes(stroke.layerId)) continue;
 
       // Convert geographic coordinates to screen coordinates
       const screenPoints: Array<{ x: number; y: number }> = [];
@@ -508,12 +516,12 @@ export function MapWithDrawing({
     ctx.globalCompositeOperation = 'source-over';
   }, [getContext, latLngToCanvas]);
 
-  // Redraw when strokes change (undo/redo)
+  // Redraw when strokes or visible layers change (undo/redo)
   useEffect(() => {
     if (strokes !== undefined) {
-      redrawStrokes(strokes);
+      redrawStrokes(strokes, visibleLayerIds);
     }
-  }, [strokes, redrawStrokes]);
+  }, [strokes, visibleLayerIds, redrawStrokes]);
 
   // Reload tiles when switching to navigate mode (after drawing), then redraw strokes
   useEffect(() => {
@@ -522,12 +530,12 @@ export function MapWithDrawing({
         await reloadTilesForCurrentView();
         // Redraw strokes after tiles are loaded to maintain undo/redo state
         if (strokes !== undefined) {
-          redrawStrokes(strokes);
+          redrawStrokes(strokes, visibleLayerIds);
         }
       };
       void reloadAndRedraw();
     }
-  }, [drawingState.mode, canvasId, reloadTilesForCurrentView, strokes, redrawStrokes]);
+  }, [drawingState.mode, canvasId, reloadTilesForCurrentView, strokes, visibleLayerIds, redrawStrokes]);
 
   // Reload tiles after map move in navigate mode, then redraw strokes
   useEffect(() => {
@@ -538,7 +546,7 @@ export function MapWithDrawing({
         await reloadTilesForCurrentView();
         // Redraw strokes after tiles are loaded to maintain undo/redo state
         if (strokes !== undefined) {
-          redrawStrokes(strokes);
+          redrawStrokes(strokes, visibleLayerIds);
         }
       })();
     };
@@ -549,7 +557,7 @@ export function MapWithDrawing({
     return () => {
       map.off('moveend', handleMoveEnd);
     };
-  }, [drawingState.mode, canvasId, reloadTilesForCurrentView, strokes, redrawStrokes]);
+  }, [drawingState.mode, canvasId, reloadTilesForCurrentView, strokes, visibleLayerIds, redrawStrokes]);
 
   const cursor = drawingState.mode === 'navigate' ? 'grab' : !isDrawableZoom ? 'not-allowed' : drawingState.mode === 'draw' ? 'crosshair' : 'cell';
   const pointerEvents = drawingState.mode === 'navigate' ? 'none' : 'auto';

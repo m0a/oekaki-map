@@ -101,10 +101,35 @@ export const LINE_THICKNESSES = {
   thick: 8,
 } as const;
 
+// Layer entity - drawing layer within a canvas
+export interface Layer {
+  id: string;
+  canvasId: string;
+  name: string;
+  order: number; // 0 is bottom layer
+  visible: boolean;
+  createdAt: string; // ISO8601
+  updatedAt: string; // ISO8601
+}
+
+// Layer state management
+export interface LayersState {
+  layers: Layer[];
+  activeLayerId: string | null;
+  isLoading: boolean;
+  error: string | null;
+}
+
+// Layer constants
+export const MAX_LAYERS_PER_CANVAS = 10;
+export const DEFAULT_LAYER_NAME_PREFIX = 'レイヤー';
+
 // Undo/Redo types
 export interface StrokeData {
   /** Unique identifier for the stroke */
   id: string;
+  /** Layer this stroke belongs to */
+  layerId: string;
   /** Points that make up this stroke (Geographic coordinates for position independence) */
   points: Array<{ lat: number; lng: number }>;
   /** Stroke color (HEX format, e.g., "#000000") */

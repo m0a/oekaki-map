@@ -11,6 +11,7 @@ const getTilesQuerySchema = z.object({
   maxX: z.coerce.number().int().min(0),
   minY: z.coerce.number().int().min(0),
   maxY: z.coerce.number().int().min(0),
+  layerId: z.string().optional(), // Optional layer filter
 });
 
 // Tiles routes
@@ -30,8 +31,9 @@ tilesRoutes.get('/:canvasId/tiles', async (c) => {
     );
   }
 
-  const { z, minX, maxX, minY, maxY } = parseResult.data;
+  const { z, minX, maxX, minY, maxY, layerId } = parseResult.data;
   const canvasService = createCanvasService(c.env);
+  const tileService = createTileService(c.env);
 
   try {
     // Check canvas exists
@@ -43,13 +45,14 @@ tilesRoutes.get('/:canvasId/tiles', async (c) => {
       );
     }
 
-    const tiles = await canvasService.getTilesInArea(
+    const tiles = await tileService.getTilesInArea(
       canvasId,
       z,
       minX,
       maxX,
       minY,
-      maxY
+      maxY,
+      layerId
     );
 
     return c.json({ tiles });

@@ -3,8 +3,9 @@ import { renderHook, act } from '@testing-library/react';
 import { useUndoRedo } from './useUndoRedo';
 import type { StrokeData } from '../types';
 
-const createMockStroke = (id: string): StrokeData => ({
+const createMockStroke = (id: string, layerId = 'layer1'): StrokeData => ({
   id,
+  layerId,
   points: [{ lat: 35.6812, lng: 139.7671 }, { lat: 35.6813, lng: 139.7672 }],
   color: '#000000',
   thickness: 4,

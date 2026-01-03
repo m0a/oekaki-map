@@ -32,3 +32,18 @@ CREATE INDEX IF NOT EXISTS idx_tile_canvas ON drawing_tile(canvas_id);
 
 -- Prevent duplicate tiles at same coordinates
 CREATE UNIQUE INDEX IF NOT EXISTS idx_tile_coords ON drawing_tile(canvas_id, z, x, y);
+
+-- Layer table: drawing layers within a canvas
+CREATE TABLE IF NOT EXISTS layer (
+  id TEXT PRIMARY KEY,
+  canvas_id TEXT NOT NULL REFERENCES canvas(id) ON DELETE CASCADE,
+  name TEXT NOT NULL CHECK (length(name) <= 50),
+  "order" INTEGER NOT NULL CHECK ("order" >= 0),
+  visible INTEGER NOT NULL DEFAULT 1 CHECK (visible IN (0, 1)),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (canvas_id, "order")
+);
+
+-- Index for loading layers by canvas
+CREATE INDEX IF NOT EXISTS idx_layer_canvas ON layer(canvas_id);

@@ -94,3 +94,42 @@ export const MAX_ZOOM = 19;
 export const MAX_TILES_PER_CANVAS = 1000;
 export const MAX_TILE_SIZE_BYTES = 100 * 1024; // 100KB
 export const TILE_DIMENSION = 256; // 256x256 pixels
+
+// Layer entity - drawing layer within a canvas
+export interface Layer {
+  id: string;
+  canvasId: string;
+  name: string;
+  order: number; // 0 is bottom layer
+  visible: boolean;
+  createdAt: string; // ISO8601
+  updatedAt: string; // ISO8601
+}
+
+// Layer API Request types
+export interface CreateLayerRequest {
+  name?: string; // Optional, auto-generated if not provided
+}
+
+export interface UpdateLayerRequest {
+  name?: string;
+  order?: number;
+  visible?: boolean;
+}
+
+// Layer API Response types
+export interface GetLayersResponse {
+  layers: Layer[];
+}
+
+export interface CreateLayerResponse {
+  layer: Layer;
+}
+
+export interface UpdateLayerResponse {
+  layer: Layer;
+}
+
+// Layer constants
+export const MAX_LAYERS_PER_CANVAS = 10;
+export const MAX_LAYER_NAME_LENGTH = 50;
