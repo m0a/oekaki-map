@@ -134,15 +134,7 @@ jobs:
           path: frontend/dist/
 
       - name: Run D1 migrations (preview)
-        run: |
-          cd backend
-          # Run schema first (creates tables if not exist)
-          pnpm exec wrangler d1 execute oekaki-map-db-preview --remote --file=./src/db/schema.sql || true
-          # Run all migration files in order (ignore errors for already-applied migrations)
-          for f in ./src/db/migrations/*.sql; do
-            echo "Running migration: $f"
-            pnpm exec wrangler d1 execute oekaki-map-db-preview --remote --file="$f" || true
-          done
+        run: cd backend && pnpm exec wrangler d1 migrations apply oekaki-map-db-preview --remote
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -183,15 +175,7 @@ jobs:
           path: frontend/dist/
 
       - name: Run D1 migrations (production)
-        run: |
-          cd backend
-          # Run schema first (creates tables if not exist)
-          pnpm exec wrangler d1 execute oekaki-map-db --remote --file=./src/db/schema.sql || true
-          # Run all migration files in order (ignore errors for already-applied migrations)
-          for f in ./src/db/migrations/*.sql; do
-            echo "Running migration: $f"
-            pnpm exec wrangler d1 execute oekaki-map-db --remote --file="$f" || true
-          done
+        run: cd backend && pnpm exec wrangler d1 migrations apply oekaki-map-db --remote
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
