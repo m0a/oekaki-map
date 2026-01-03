@@ -105,21 +105,16 @@ export const LINE_THICKNESSES = {
 export interface StrokeData {
   /** Unique identifier for the stroke */
   id: string;
-  /** Points that make up this stroke (Canvas coordinates) */
-  points: Array<{ x: number; y: number }>;
+  /** Points that make up this stroke (Geographic coordinates for position independence) */
+  points: Array<{ lat: number; lng: number }>;
   /** Stroke color (HEX format, e.g., "#000000") */
   color: string;
-  /** Stroke thickness in pixels */
+  /** Stroke thickness in pixels at the original zoom level */
   thickness: number;
   /** Drawing mode when stroke was created */
   mode: 'draw' | 'erase';
   /** Timestamp when stroke was created (Unix timestamp) */
   timestamp: number;
-  /** Canvas origin in map coordinates when stroke was drawn */
-  canvasOrigin: {
-    lat: number;
-    lng: number;
-  };
-  /** Zoom level when stroke was drawn */
+  /** Zoom level when stroke was drawn (used for thickness scaling) */
   zoom: number;
 }

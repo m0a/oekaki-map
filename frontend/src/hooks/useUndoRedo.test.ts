@@ -5,12 +5,11 @@ import type { StrokeData } from '../types';
 
 const createMockStroke = (id: string): StrokeData => ({
   id,
-  points: [{ x: 0, y: 0 }, { x: 10, y: 10 }],
+  points: [{ lat: 35.6812, lng: 139.7671 }, { lat: 35.6813, lng: 139.7672 }],
   color: '#000000',
   thickness: 4,
   mode: 'draw',
   timestamp: Date.now(),
-  canvasOrigin: { lat: 35.6812, lng: 139.7671 },
   zoom: 18,
 });
 

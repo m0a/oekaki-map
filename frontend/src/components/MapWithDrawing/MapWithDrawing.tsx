@@ -57,8 +57,8 @@ export function MapWithDrawing({
   const isDrawingRef = useRef(false);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
 
-  // Current stroke points for undo/redo
-  const currentStrokePointsRef = useRef<Array<{ x: number; y: number }>>([]);
+  // Current stroke points for undo/redo (stored as geographic coordinates)
+  const currentStrokePointsRef = useRef<Array<{ lat: number; lng: number }>>([]);
 
   // Canvas origin (updated on map move)
   const canvasOriginRef = useRef<L.LatLng | null>(null);
@@ -79,6 +79,20 @@ export function MapWithDrawing({
       x: clientX - rect.left,
       y: clientY - rect.top,
     };
+  }, []);
+
+  // Convert canvas point to geographic coordinates
+  const canvasToLatLng = useCallback((point: { x: number; y: number }): { lat: number; lng: number } | null => {
+    if (!mapRef.current) return null;
+    const latLng = mapRef.current.containerPointToLatLng([point.x, point.y]);
+    return { lat: latLng.lat, lng: latLng.lng };
+  }, []);
+
+  // Convert geographic coordinates to canvas point
+  const latLngToCanvas = useCallback((latLng: { lat: number; lng: number }): { x: number; y: number } | null => {
+    if (!mapRef.current) return null;
+    const point = mapRef.current.latLngToContainerPoint([latLng.lat, latLng.lng]);
+    return { x: point.x, y: point.y };
   }, []);
 
   // Draw a line on the canvas
@@ -192,7 +206,12 @@ export function MapWithDrawing({
     const point = screenToCanvas(e.clientX, e.clientY);
     if (point) {
       lastPointRef.current = point;
-      currentStrokePointsRef.current.push(point);
+
+      // Store geographic coordinates for undo/redo
+      const latLng = canvasToLatLng(point);
+      if (latLng) {
+        currentStrokePointsRef.current.push(latLng);
+      }
 
       // Draw a dot
       const ctx = getContext();
@@ -208,7 +227,7 @@ export function MapWithDrawing({
         ctx.fill();
       }
     }
-  }, [drawingState, screenToCanvas, getContext, isDrawableZoom, currentZoom]);
+  }, [drawingState, screenToCanvas, canvasToLatLng, getContext, isDrawableZoom, currentZoom]);
 
   // Handle pointer move
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
@@ -221,9 +240,14 @@ export function MapWithDrawing({
     if (point && lastPointRef.current) {
       drawLine(lastPointRef.current, point);
       lastPointRef.current = point;
-      currentStrokePointsRef.current.push(point);
+
+      // Store geographic coordinates for undo/redo
+      const latLng = canvasToLatLng(point);
+      if (latLng) {
+        currentStrokePointsRef.current.push(latLng);
+      }
     }
-  }, [drawingState.mode, screenToCanvas, drawLine, isDrawableZoom]);
+  }, [drawingState.mode, screenToCanvas, canvasToLatLng, drawLine, isDrawableZoom]);
 
   // Handle pointer up
   const handlePointerUp = useCallback(() => {
@@ -233,12 +257,12 @@ export function MapWithDrawing({
     lastPointRef.current = null;
 
     // Notify about stroke end
-    if (canvasRef.current && mapRef.current && canvasOriginRef.current && onStrokeEnd) {
+    if (canvasRef.current && mapRef.current && onStrokeEnd) {
       const map = mapRef.current;
       const bounds = map.getBounds();
       const zoom = map.getZoom();
 
-      // Create stroke data for undo/redo
+      // Create stroke data for undo/redo (using geographic coordinates)
       const strokeData: StrokeData = {
         id: crypto.randomUUID(),
         points: [...currentStrokePointsRef.current],
@@ -246,10 +270,6 @@ export function MapWithDrawing({
         thickness: drawingState.thickness,
         mode: drawingState.mode === 'erase' ? 'erase' : 'draw',
         timestamp: Date.now(),
-        canvasOrigin: {
-          lat: canvasOriginRef.current.lat,
-          lng: canvasOriginRef.current.lng,
-        },
         zoom: zoom,
       };
 
@@ -446,7 +466,9 @@ export function MapWithDrawing({
   // Redraw strokes from history (for undo/redo)
   const redrawStrokes = useCallback((strokesData: StrokeData[]) => {
     const ctx = getContext();
-    if (!ctx || !canvasRef.current) return;
+    if (!ctx || !canvasRef.current || !mapRef.current) return;
+
+    const currentZoomLevel = mapRef.current.getZoom();
 
     // Clear canvas
     ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
@@ -455,9 +477,24 @@ export function MapWithDrawing({
     for (const stroke of strokesData) {
       if (stroke.points.length === 0) continue;
 
+      // Convert geographic coordinates to screen coordinates
+      const screenPoints: Array<{ x: number; y: number }> = [];
+      for (const latLng of stroke.points) {
+        const screenPoint = latLngToCanvas(latLng);
+        if (screenPoint) {
+          screenPoints.push(screenPoint);
+        }
+      }
+
+      if (screenPoints.length === 0) continue;
+
+      // Scale thickness based on zoom level difference
+      const zoomDiff = currentZoomLevel - stroke.zoom;
+      const scaledThickness = stroke.thickness * Math.pow(2, zoomDiff);
+
       ctx.beginPath();
       ctx.strokeStyle = stroke.mode === 'erase' ? 'rgba(0,0,0,1)' : stroke.color;
-      ctx.lineWidth = stroke.thickness;
+      ctx.lineWidth = scaledThickness;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
 
@@ -467,20 +504,20 @@ export function MapWithDrawing({
         ctx.globalCompositeOperation = 'source-over';
       }
 
-      const firstPoint = stroke.points[0];
+      const firstPoint = screenPoints[0];
       if (!firstPoint) continue;
 
-      if (stroke.points.length === 1) {
+      if (screenPoints.length === 1) {
         // Single point - draw a dot
         ctx.beginPath();
-        ctx.arc(firstPoint.x, firstPoint.y, stroke.thickness / 2, 0, Math.PI * 2);
+        ctx.arc(firstPoint.x, firstPoint.y, scaledThickness / 2, 0, Math.PI * 2);
         ctx.fillStyle = stroke.mode === 'erase' ? 'rgba(0,0,0,1)' : stroke.color;
         ctx.fill();
       } else {
         // Multiple points - draw lines
         ctx.moveTo(firstPoint.x, firstPoint.y);
-        for (let i = 1; i < stroke.points.length; i++) {
-          const point = stroke.points[i];
+        for (let i = 1; i < screenPoints.length; i++) {
+          const point = screenPoints[i];
           if (point) {
             ctx.lineTo(point.x, point.y);
           }
@@ -491,7 +528,7 @@ export function MapWithDrawing({
 
     // Reset composite operation
     ctx.globalCompositeOperation = 'source-over';
-  }, [getContext]);
+  }, [getContext, latLngToCanvas]);
 
   // Redraw when strokes change (undo/redo)
   useEffect(() => {
