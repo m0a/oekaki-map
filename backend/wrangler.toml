@@ -4,7 +4,11 @@ compatibility_date = "2024-12-01"
 compatibility_flags = ["nodejs_compat"]
 
 # Static assets (frontend build)
-assets = { directory = "../frontend/dist", binding = "ASSETS" }
+# run_worker_first: Invoke Worker script first for these routes (OGP handling)
+[assets]
+directory = "../frontend/dist"
+binding = "ASSETS"
+run_worker_first = ["/", "/c/*"]
 
 # D1 Database binding
 [[d1_databases]]
