@@ -1,5 +1,17 @@
-import { DEFAULT_COLORS, LINE_THICKNESSES, type DrawingState } from '../../types';
+import { useState, useRef, useEffect } from 'react';
+import { DEFAULT_COLORS, LINE_THICKNESSES, type DrawingState, type PopupType } from '../../types';
 import { ShareButton } from '../ShareButton';
+import { IconButton } from './IconButton';
+import { ColorPopup } from './ColorPopup';
+import { ThicknessPopup } from './ThicknessPopup';
+import {
+  PencilIcon,
+  EraserIcon,
+  HandIcon,
+  LayersIcon,
+  UndoIcon,
+  RedoIcon,
+} from './icons';
 
 interface ToolbarProps {
   color: string;
@@ -44,6 +56,47 @@ export function Toolbar({
   onGetLocation,
   isGettingLocation,
 }: ToolbarProps) {
+  const [openPopup, setOpenPopup] = useState<PopupType>('none');
+  const colorPopupRef = useRef<HTMLDivElement>(null);
+  const thicknessPopupRef = useRef<HTMLDivElement>(null);
+
+  // Handle outside click to close popups
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (openPopup === 'none') return;
+
+      const target = e.target as Node;
+
+      if (openPopup === 'color' && colorPopupRef.current && !colorPopupRef.current.contains(target)) {
+        setOpenPopup('none');
+      }
+      if (openPopup === 'thickness' && thicknessPopupRef.current && !thicknessPopupRef.current.contains(target)) {
+        setOpenPopup('none');
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [openPopup]);
+
+  const handleColorButtonClick = () => {
+    setOpenPopup(openPopup === 'color' ? 'none' : 'color');
+  };
+
+  const handleColorSelect = (newColor: string) => {
+    onColorChange(newColor);
+    setOpenPopup('none');
+  };
+
+  const handleThicknessButtonClick = () => {
+    setOpenPopup(openPopup === 'thickness' ? 'none' : 'thickness');
+  };
+
+  const handleThicknessSelect = (newThickness: number) => {
+    onThicknessChange(newThickness);
+    setOpenPopup('none');
+  };
+
   return (
     <div
       style={{
@@ -52,175 +105,155 @@ export function Toolbar({
         left: '50%',
         transform: 'translateX(-50%)',
         display: 'flex',
-        gap: 8,
-        padding: 12,
+        gap: 4,
+        padding: 8,
         backgroundColor: 'white',
         borderRadius: 12,
         boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
         zIndex: 1000,
-        flexWrap: 'wrap',
-        justifyContent: 'center',
-        maxWidth: 'calc(100vw - 32px)',
+        alignItems: 'center',
       }}
     >
-      {/* Color palette */}
-      <div style={{ display: 'flex', gap: 4 }}>
-        {DEFAULT_COLORS.map((c) => (
-          <button
-            key={c}
-            onClick={() => onColorChange(c)}
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: '50%',
-              backgroundColor: c,
-              border: color === c ? '3px solid #007AFF' : '2px solid #ddd',
-              cursor: 'pointer',
-              padding: 0,
-            }}
-            aria-label={`Color ${c}`}
-          />
-        ))}
-      </div>
-
-      {/* Separator */}
-      <div
-        style={{
-          width: 1,
-          backgroundColor: '#ddd',
-          margin: '0 4px',
-        }}
-      />
-
-      {/* Thickness selector */}
-      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-        {Object.entries(LINE_THICKNESSES).map(([name, value]) => (
-          <button
-            key={name}
-            onClick={() => onThicknessChange(value)}
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 8,
-              backgroundColor: thickness === value ? '#007AFF' : '#f0f0f0',
-              border: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-            aria-label={`${name} thickness`}
-          >
-            <div
-              style={{
-                width: value * 2,
-                height: value * 2,
-                borderRadius: '50%',
-                backgroundColor: thickness === value ? 'white' : '#333',
-              }}
-            />
-          </button>
-        ))}
-      </div>
-
-      {/* Separator */}
-      <div
-        style={{
-          width: 1,
-          backgroundColor: '#ddd',
-          margin: '0 4px',
-        }}
-      />
-
-      {/* Undo/Redo buttons */}
-      <div style={{ display: 'flex', gap: 4 }}>
+      {/* Color button with popup */}
+      <div ref={colorPopupRef} style={{ position: 'relative' }}>
         <button
+          onClick={handleColorButtonClick}
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 8,
+            backgroundColor: color,
+            border: openPopup === 'color' ? '3px solid #007AFF' : '2px solid #ddd',
+            cursor: 'pointer',
+            padding: 0,
+          }}
+          aria-label="Color picker"
+          title="色を選択"
+        />
+        {openPopup === 'color' && (
+          <ColorPopup
+            colors={DEFAULT_COLORS}
+            selectedColor={color}
+            onColorSelect={handleColorSelect}
+            onClose={() => setOpenPopup('none')}
+          />
+        )}
+      </div>
+
+      {/* Separator */}
+      <div
+        style={{
+          width: 1,
+          height: 32,
+          backgroundColor: '#ddd',
+          margin: '0 4px',
+        }}
+      />
+
+      {/* Thickness button with popup */}
+      <div ref={thicknessPopupRef} style={{ position: 'relative' }}>
+        <button
+          onClick={handleThicknessButtonClick}
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 8,
+            backgroundColor: openPopup === 'thickness' ? '#007AFF' : '#f0f0f0',
+            border: openPopup === 'thickness' ? '3px solid #007AFF' : '2px solid #ddd',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 0,
+          }}
+          aria-label="Thickness picker"
+          title="線の太さを選択"
+        >
+          <div
+            style={{
+              width: thickness * 2,
+              height: thickness * 2,
+              borderRadius: '50%',
+              backgroundColor: openPopup === 'thickness' ? 'white' : '#333',
+            }}
+          />
+        </button>
+        {openPopup === 'thickness' && (
+          <ThicknessPopup
+            thicknesses={LINE_THICKNESSES}
+            selectedThickness={thickness}
+            onThicknessSelect={handleThicknessSelect}
+            onClose={() => setOpenPopup('none')}
+          />
+        )}
+      </div>
+
+      {/* Separator */}
+      <div
+        style={{
+          width: 1,
+          height: 32,
+          backgroundColor: '#ddd',
+          margin: '0 4px',
+        }}
+      />
+
+      {/* Undo/Redo buttons - Icon only */}
+      <div style={{ display: 'flex', gap: 4 }}>
+        <IconButton
+          icon={<UndoIcon size={20} />}
+          label="Undo"
+          tooltip="元に戻す"
           onClick={onUndo}
           disabled={!canUndo}
-          style={{
-            padding: '8px 12px',
-            borderRadius: 8,
-            backgroundColor: canUndo ? '#f0f0f0' : '#e0e0e0',
-            color: canUndo ? '#333' : '#999',
-            border: 'none',
-            cursor: canUndo ? 'pointer' : 'not-allowed',
-            fontWeight: 'normal',
-          }}
-          aria-label="Undo"
-        >
-          ↩ Undo
-        </button>
-        <button
+          size={36}
+        />
+        <IconButton
+          icon={<RedoIcon size={20} />}
+          label="Redo"
+          tooltip="やり直し"
           onClick={onRedo}
           disabled={!canRedo}
-          style={{
-            padding: '8px 12px',
-            borderRadius: 8,
-            backgroundColor: canRedo ? '#f0f0f0' : '#e0e0e0',
-            color: canRedo ? '#333' : '#999',
-            border: 'none',
-            cursor: canRedo ? 'pointer' : 'not-allowed',
-            fontWeight: 'normal',
-          }}
-          aria-label="Redo"
-        >
-          Redo ↪
-        </button>
+          size={36}
+        />
       </div>
 
       {/* Separator */}
       <div
         style={{
           width: 1,
+          height: 32,
           backgroundColor: '#ddd',
           margin: '0 4px',
         }}
       />
 
-      {/* Mode toggle */}
+      {/* Mode toggle - Icon buttons */}
       <div style={{ display: 'flex', gap: 4 }}>
-        <button
+        <IconButton
+          icon={<PencilIcon size={20} />}
+          label="Draw"
+          tooltip="描画"
           onClick={() => onModeChange('draw')}
-          style={{
-            padding: '8px 12px',
-            borderRadius: 8,
-            backgroundColor: mode === 'draw' ? '#007AFF' : '#f0f0f0',
-            color: mode === 'draw' ? 'white' : '#333',
-            border: 'none',
-            cursor: 'pointer',
-            fontWeight: mode === 'draw' ? 'bold' : 'normal',
-          }}
-        >
-          Draw
-        </button>
-        <button
+          isActive={mode === 'draw'}
+          size={36}
+        />
+        <IconButton
+          icon={<EraserIcon size={20} />}
+          label="Erase"
+          tooltip="消去"
           onClick={() => onModeChange('erase')}
-          style={{
-            padding: '8px 12px',
-            borderRadius: 8,
-            backgroundColor: mode === 'erase' ? '#007AFF' : '#f0f0f0',
-            color: mode === 'erase' ? 'white' : '#333',
-            border: 'none',
-            cursor: 'pointer',
-            fontWeight: mode === 'erase' ? 'bold' : 'normal',
-          }}
-        >
-          Erase
-        </button>
-        <button
+          isActive={mode === 'erase'}
+          size={36}
+        />
+        <IconButton
+          icon={<HandIcon size={20} />}
+          label="Move"
+          tooltip="移動"
           onClick={() => onModeChange('navigate')}
-          style={{
-            padding: '8px 12px',
-            borderRadius: 8,
-            backgroundColor: mode === 'navigate' ? '#007AFF' : '#f0f0f0',
-            color: mode === 'navigate' ? 'white' : '#333',
-            border: 'none',
-            cursor: 'pointer',
-            fontWeight: mode === 'navigate' ? 'bold' : 'normal',
-          }}
-        >
-          Move
-        </button>
+          isActive={mode === 'navigate'}
+          size={36}
+        />
       </div>
 
       {/* Layer panel toggle button */}
@@ -230,26 +263,19 @@ export function Toolbar({
           <div
             style={{
               width: 1,
+              height: 32,
               backgroundColor: '#ddd',
               margin: '0 4px',
             }}
           />
-          <button
-            data-testid="layer-toggle-button"
+          <IconButton
+            icon={<LayersIcon size={20} />}
+            label="Toggle layer panel"
+            tooltip="レイヤー"
             onClick={onToggleLayerPanel}
-            style={{
-              padding: '8px 12px',
-              borderRadius: 8,
-              backgroundColor: isLayerPanelOpen ? '#007AFF' : '#f0f0f0',
-              color: isLayerPanelOpen ? 'white' : '#333',
-              border: 'none',
-              cursor: 'pointer',
-              fontWeight: isLayerPanelOpen ? 'bold' : 'normal',
-            }}
-            aria-label="Toggle layer panel"
-          >
-            Layers
-          </button>
+            isActive={isLayerPanelOpen ?? false}
+            size={36}
+          />
         </>
       )}
 
@@ -260,6 +286,7 @@ export function Toolbar({
           <div
             style={{
               width: 1,
+              height: 32,
               backgroundColor: '#ddd',
               margin: '0 4px',
             }}
@@ -280,6 +307,7 @@ export function Toolbar({
           <div
             style={{
               width: 1,
+              height: 32,
               backgroundColor: '#ddd',
               margin: '0 4px',
             }}
@@ -288,18 +316,17 @@ export function Toolbar({
             onClick={onGetLocation}
             disabled={isGettingLocation}
             style={{
-              padding: '8px 12px',
+              width: 36,
+              height: 36,
               borderRadius: 8,
               backgroundColor: isGettingLocation ? '#e0e0e0' : '#f0f0f0',
               color: isGettingLocation ? '#999' : '#333',
               border: 'none',
               cursor: isGettingLocation ? 'not-allowed' : 'pointer',
-              fontWeight: 'normal',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              minWidth: 44,
-              minHeight: 36,
+              padding: 0,
             }}
             aria-label="現在位置"
             aria-busy={isGettingLocation}
@@ -328,7 +355,6 @@ export function Toolbar({
                 aria-hidden="true"
                 style={{ width: 20, height: 20 }}
               >
-                {/* Location crosshair icon */}
                 <circle cx="12" cy="12" r="4" />
                 <line x1="12" y1="2" x2="12" y2="6" />
                 <line x1="12" y1="18" x2="12" y2="22" />

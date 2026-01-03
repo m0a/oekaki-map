@@ -127,6 +127,9 @@ export interface LayersState {
 export const MAX_LAYERS_PER_CANVAS = 10;
 export const DEFAULT_LAYER_NAME_PREFIX = 'レイヤー';
 
+// Toolbar popup types
+export type PopupType = 'none' | 'color' | 'thickness';
+
 // Undo/Redo types
 export interface StrokeData {
   /** Unique identifier for the stroke */
