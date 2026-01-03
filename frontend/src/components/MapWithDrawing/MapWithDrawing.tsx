@@ -391,28 +391,6 @@ export function MapWithDrawing({
     }
   }, [drawingState.mode]);
 
-  // Reload tiles when switching to navigate mode (after drawing)
-  useEffect(() => {
-    if (drawingState.mode === 'navigate' && canvasId) {
-      void reloadTilesForCurrentView();
-    }
-  }, [drawingState.mode, canvasId, reloadTilesForCurrentView]);
-
-  // Reload tiles after map move in navigate mode
-  useEffect(() => {
-    if (!mapRef.current || drawingState.mode !== 'navigate' || !canvasId) return;
-
-    const handleMoveEnd = () => {
-      void reloadTilesForCurrentView();
-    };
-
-    const map = mapRef.current;
-    map.on('moveend', handleMoveEnd);
-
-    return () => {
-      map.off('moveend', handleMoveEnd);
-    };
-  }, [drawingState.mode, canvasId, reloadTilesForCurrentView]);
 
   // Update position from props
   useEffect(() => {
@@ -536,6 +514,40 @@ export function MapWithDrawing({
       redrawStrokes(strokes);
     }
   }, [strokes, redrawStrokes]);
+
+  // Reload tiles when switching to navigate mode (after drawing), then redraw strokes
+  useEffect(() => {
+    if (drawingState.mode === 'navigate' && canvasId) {
+      const reloadAndRedraw = async () => {
+        await reloadTilesForCurrentView();
+        // Redraw strokes after tiles are loaded to maintain undo/redo state
+        if (strokes !== undefined) {
+          redrawStrokes(strokes);
+        }
+      };
+      void reloadAndRedraw();
+    }
+  }, [drawingState.mode, canvasId, reloadTilesForCurrentView, strokes, redrawStrokes]);
+
+  // Reload tiles after map move in navigate mode, then redraw strokes
+  useEffect(() => {
+    if (!mapRef.current || drawingState.mode !== 'navigate' || !canvasId) return;
+
+    const handleMoveEnd = async () => {
+      await reloadTilesForCurrentView();
+      // Redraw strokes after tiles are loaded to maintain undo/redo state
+      if (strokes !== undefined) {
+        redrawStrokes(strokes);
+      }
+    };
+
+    const map = mapRef.current;
+    map.on('moveend', handleMoveEnd);
+
+    return () => {
+      map.off('moveend', handleMoveEnd);
+    };
+  }, [drawingState.mode, canvasId, reloadTilesForCurrentView, strokes, redrawStrokes]);
 
   const cursor = drawingState.mode === 'navigate' ? 'grab' : !isDrawableZoom ? 'not-allowed' : drawingState.mode === 'draw' ? 'crosshair' : 'cell';
   const pointerEvents = drawingState.mode === 'navigate' ? 'none' : 'auto';
