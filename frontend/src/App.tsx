@@ -62,16 +62,16 @@ export function App({ canvasId }: AppProps) {
   // Load layers when canvas is available
   useEffect(() => {
     if (canvas.canvas?.id) {
-      layers.loadLayers(canvas.canvas.id);
+      void layers.loadLayers(canvas.canvas.id);
     }
-  }, [canvas.canvas?.id, layers.loadLayers]);
+  }, [canvas.canvas?.id, layers]);
 
   // Create default layer if canvas has no layers
   useEffect(() => {
     if (canvas.canvas?.id && layers.layers.length === 0 && !layers.isLoading) {
-      layers.createDefaultLayerIfNeeded(canvas.canvas.id);
+      void layers.createDefaultLayerIfNeeded(canvas.canvas.id);
     }
-  }, [canvas.canvas?.id, layers.layers.length, layers.isLoading, layers.createDefaultLayerIfNeeded]);
+  }, [canvas.canvas?.id, layers]);
 
   // Layer panel handlers
   const handleToggleLayerPanel = useCallback(() => {

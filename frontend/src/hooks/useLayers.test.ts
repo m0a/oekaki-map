@@ -20,7 +20,7 @@ describe('useLayers', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ layers: mockLayers }),
+        json: () => Promise.resolve({ layers: mockLayers }),
       });
 
       const { result } = renderHook(() => useLayers());
@@ -55,7 +55,7 @@ describe('useLayers', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 201,
-        json: async () => ({ layer: newLayer }),
+        json: () => Promise.resolve({ layer: newLayer }),
       });
 
       const { result } = renderHook(() => useLayers());
@@ -74,7 +74,7 @@ describe('useLayers', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 201,
-        json: async () => ({ layer: newLayer }),
+        json: () => Promise.resolve({ layer: newLayer }),
       });
 
       const { result } = renderHook(() => useLayers());
@@ -97,7 +97,7 @@ describe('useLayers', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ layers: mockLayers }),
+        json: () => Promise.resolve({ layers: mockLayers }),
       });
 
       const { result } = renderHook(() => useLayers());
@@ -128,7 +128,7 @@ describe('useLayers', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ layers: mockLayers }),
+        json: () => Promise.resolve({ layers: mockLayers }),
       });
 
       const { result } = renderHook(() => useLayers());
@@ -153,7 +153,7 @@ describe('useLayers', () => {
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ layers: mockLayers }),
+        json: () => Promise.resolve({ layers: mockLayers }),
       });
 
       const { result } = renderHook(() => useLayers());

@@ -39,8 +39,8 @@ export function useLayers(): UseLayersReturn {
         throw new Error('Failed to load layers');
       }
 
-      const data = await response.json();
-      const loadedLayers = data.layers as Layer[];
+      const data = await response.json() as { layers: Layer[] };
+      const loadedLayers = data.layers;
 
       setLayers(loadedLayers);
 
@@ -71,8 +71,8 @@ export function useLayers(): UseLayersReturn {
         throw new Error('Failed to create layer');
       }
 
-      const data = await response.json();
-      const newLayer = data.layer as Layer;
+      const data = await response.json() as { layer: Layer };
+      const newLayer = data.layer;
 
       setLayers((prev) => [...prev, newLayer].sort((a, b) => a.order - b.order));
       setActiveLayerId(newLayer.id);
@@ -105,8 +105,8 @@ export function useLayers(): UseLayersReturn {
         throw new Error('Failed to update layer');
       }
 
-      const data = await response.json();
-      const updatedLayer = data.layer as Layer;
+      const data = await response.json() as { layer: Layer };
+      const updatedLayer = data.layer;
 
       setLayers((prev) =>
         prev.map((l) => (l.id === layerId ? updatedLayer : l)).sort((a, b) => a.order - b.order)
