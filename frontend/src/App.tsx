@@ -5,8 +5,10 @@ import { Toolbar } from './components/Toolbar/Toolbar';
 import { useDrawing } from './hooks/useDrawing';
 import { useCanvas } from './hooks/useCanvas';
 import { useAutoSave } from './hooks/useAutoSave';
+import { useUndoRedo } from './hooks/useUndoRedo';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { extractTilesFromCanvas } from './utils/tiles';
-import type { MapPosition } from './types';
+import type { MapPosition, StrokeData } from './types';
 
 interface AppProps {
   canvasId: string | undefined;
@@ -24,6 +26,15 @@ export function App({ canvasId }: AppProps) {
   const drawing = useDrawing();
   const canvas = useCanvas(canvasId);
   const autoSave = useAutoSave();
+  const undoRedo = useUndoRedo();
+
+  // Keyboard shortcuts for undo/redo
+  useKeyboardShortcuts({
+    onUndo: undoRedo.undo,
+    onRedo: undoRedo.redo,
+    canUndo: undoRedo.canUndo,
+    canRedo: undoRedo.canRedo,
+  });
 
   // Initialize map position from canvas or default
   useEffect(() => {
@@ -65,9 +76,14 @@ export function App({ canvasId }: AppProps) {
     canvasZoomRef.current = zoom;
   }, []);
 
-  // Handle stroke end - save canvas state
+  // Handle stroke end - save canvas state and add to undo history
   const handleStrokeEnd = useCallback(
-    async (canvasElement: HTMLCanvasElement, bounds: L.LatLngBounds, zoom: number) => {
+    async (canvasElement: HTMLCanvasElement, bounds: L.LatLngBounds, zoom: number, strokeData?: StrokeData) => {
+      // Add stroke to undo history if provided
+      if (strokeData && strokeData.points.length > 0) {
+        undoRedo.push(strokeData);
+      }
+
       // Create canvas if needed, capture ID for later use
       let currentCanvasId = canvas.canvas?.id;
       if (!currentCanvasId) {
@@ -106,7 +122,7 @@ export function App({ canvasId }: AppProps) {
         }
       });
     },
-    [canvas, mapPosition, autoSave]
+    [canvas, mapPosition, autoSave, undoRedo]
   );
 
   // Don't render map until position is initialized
@@ -151,6 +167,7 @@ export function App({ canvasId }: AppProps) {
         tiles={canvas.tiles}
         canvasId={canvas.canvas?.id}
         onFlushSave={autoSave.flushSave}
+        strokes={undoRedo.strokes}
       />
 
       {/* Toolbar */}
@@ -161,6 +178,10 @@ export function App({ canvasId }: AppProps) {
         onColorChange={drawing.setColor}
         onThicknessChange={drawing.setThickness}
         onModeChange={drawing.setMode}
+        canUndo={undoRedo.canUndo}
+        canRedo={undoRedo.canRedo}
+        onUndo={undoRedo.undo}
+        onRedo={undoRedo.redo}
       />
 
       {/* Save status indicator */}

@@ -100,3 +100,21 @@ export const LINE_THICKNESSES = {
   medium: 4,
   thick: 8,
 } as const;
+
+// Undo/Redo types
+export interface StrokeData {
+  /** Unique identifier for the stroke */
+  id: string;
+  /** Points that make up this stroke (Geographic coordinates for position independence) */
+  points: Array<{ lat: number; lng: number }>;
+  /** Stroke color (HEX format, e.g., "#000000") */
+  color: string;
+  /** Stroke thickness in pixels at the original zoom level */
+  thickness: number;
+  /** Drawing mode when stroke was created */
+  mode: 'draw' | 'erase';
+  /** Timestamp when stroke was created (Unix timestamp) */
+  timestamp: number;
+  /** Zoom level when stroke was drawn (used for thickness scaling) */
+  zoom: number;
+}

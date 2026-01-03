@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import type { MapPosition, DrawingState } from '../../types';
+import type { MapPosition, DrawingState, StrokeData } from '../../types';
 import { loadTilesToCanvas } from '../../utils/tiles';
 import { api } from '../../services/api';
 
@@ -15,11 +15,12 @@ interface MapWithDrawingProps {
   position?: MapPosition;
   onPositionChange?: (position: MapPosition) => void;
   drawingState: DrawingState;
-  onStrokeEnd?: (canvas: HTMLCanvasElement, bounds: L.LatLngBounds, zoom: number) => void;
+  onStrokeEnd?: (canvas: HTMLCanvasElement, bounds: L.LatLngBounds, zoom: number, strokeData?: StrokeData) => void;
   onCanvasOriginInit?: (origin: L.LatLng, zoom: number) => void;
   tiles?: TileInfo[] | undefined;
   canvasId?: string | undefined;
   onFlushSave?: () => Promise<void>;
+  strokes?: StrokeData[];
 }
 
 // Default position: Tokyo, Japan
@@ -42,6 +43,7 @@ export function MapWithDrawing({
   tiles,
   canvasId,
   onFlushSave,
+  strokes,
 }: MapWithDrawingProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -54,6 +56,9 @@ export function MapWithDrawing({
   // Drawing state
   const isDrawingRef = useRef(false);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
+
+  // Current stroke points for undo/redo (stored as geographic coordinates)
+  const currentStrokePointsRef = useRef<Array<{ lat: number; lng: number }>>([]);
 
   // Canvas origin (updated on map move)
   const canvasOriginRef = useRef<L.LatLng | null>(null);
@@ -74,6 +79,20 @@ export function MapWithDrawing({
       x: clientX - rect.left,
       y: clientY - rect.top,
     };
+  }, []);
+
+  // Convert canvas point to geographic coordinates
+  const canvasToLatLng = useCallback((point: { x: number; y: number }): { lat: number; lng: number } | null => {
+    if (!mapRef.current) return null;
+    const latLng = mapRef.current.containerPointToLatLng([point.x, point.y]);
+    return { lat: latLng.lat, lng: latLng.lng };
+  }, []);
+
+  // Convert geographic coordinates to canvas point
+  const latLngToCanvas = useCallback((latLng: { lat: number; lng: number }): { x: number; y: number } | null => {
+    if (!mapRef.current) return null;
+    const point = mapRef.current.latLngToContainerPoint([latLng.lat, latLng.lng]);
+    return { x: point.x, y: point.y };
   }, []);
 
   // Draw a line on the canvas
@@ -182,10 +201,17 @@ export function MapWithDrawing({
     e.stopPropagation();
 
     isDrawingRef.current = true;
+    currentStrokePointsRef.current = [];
 
     const point = screenToCanvas(e.clientX, e.clientY);
     if (point) {
       lastPointRef.current = point;
+
+      // Store geographic coordinates for undo/redo
+      const latLng = canvasToLatLng(point);
+      if (latLng) {
+        currentStrokePointsRef.current.push(latLng);
+      }
 
       // Draw a dot
       const ctx = getContext();
@@ -201,7 +227,7 @@ export function MapWithDrawing({
         ctx.fill();
       }
     }
-  }, [drawingState, screenToCanvas, getContext, isDrawableZoom, currentZoom]);
+  }, [drawingState, screenToCanvas, canvasToLatLng, getContext, isDrawableZoom, currentZoom]);
 
   // Handle pointer move
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
@@ -214,8 +240,14 @@ export function MapWithDrawing({
     if (point && lastPointRef.current) {
       drawLine(lastPointRef.current, point);
       lastPointRef.current = point;
+
+      // Store geographic coordinates for undo/redo
+      const latLng = canvasToLatLng(point);
+      if (latLng) {
+        currentStrokePointsRef.current.push(latLng);
+      }
     }
-  }, [drawingState.mode, screenToCanvas, drawLine, isDrawableZoom]);
+  }, [drawingState.mode, screenToCanvas, canvasToLatLng, drawLine, isDrawableZoom]);
 
   // Handle pointer up
   const handlePointerUp = useCallback(() => {
@@ -225,13 +257,27 @@ export function MapWithDrawing({
     lastPointRef.current = null;
 
     // Notify about stroke end
-    if (canvasRef.current && mapRef.current && canvasOriginRef.current && onStrokeEnd) {
+    if (canvasRef.current && mapRef.current && onStrokeEnd) {
       const map = mapRef.current;
       const bounds = map.getBounds();
       const zoom = map.getZoom();
-      onStrokeEnd(canvasRef.current, bounds, zoom);
+
+      // Create stroke data for undo/redo (using geographic coordinates)
+      const strokeData: StrokeData = {
+        id: crypto.randomUUID(),
+        points: [...currentStrokePointsRef.current],
+        color: drawingState.color,
+        thickness: drawingState.thickness,
+        mode: drawingState.mode === 'erase' ? 'erase' : 'draw',
+        timestamp: Date.now(),
+        zoom: zoom,
+      };
+
+      onStrokeEnd(canvasRef.current, bounds, zoom, strokeData);
     }
-  }, [onStrokeEnd]);
+
+    currentStrokePointsRef.current = [];
+  }, [onStrokeEnd, drawingState.color, drawingState.thickness, drawingState.mode]);
 
   // Update canvas size to match container
   const updateCanvasSize = useCallback(() => {
@@ -345,28 +391,6 @@ export function MapWithDrawing({
     }
   }, [drawingState.mode]);
 
-  // Reload tiles when switching to navigate mode (after drawing)
-  useEffect(() => {
-    if (drawingState.mode === 'navigate' && canvasId) {
-      void reloadTilesForCurrentView();
-    }
-  }, [drawingState.mode, canvasId, reloadTilesForCurrentView]);
-
-  // Reload tiles after map move in navigate mode
-  useEffect(() => {
-    if (!mapRef.current || drawingState.mode !== 'navigate' || !canvasId) return;
-
-    const handleMoveEnd = () => {
-      void reloadTilesForCurrentView();
-    };
-
-    const map = mapRef.current;
-    map.on('moveend', handleMoveEnd);
-
-    return () => {
-      map.off('moveend', handleMoveEnd);
-    };
-  }, [drawingState.mode, canvasId, reloadTilesForCurrentView]);
 
   // Update position from props
   useEffect(() => {
@@ -416,6 +440,116 @@ export function MapWithDrawing({
 
     void loadInitialTiles();
   }, [tiles, canvasId]);
+
+  // Redraw strokes from history (for undo/redo)
+  const redrawStrokes = useCallback((strokesData: StrokeData[]) => {
+    const ctx = getContext();
+    if (!ctx || !canvasRef.current || !mapRef.current) return;
+
+    const currentZoomLevel = mapRef.current.getZoom();
+
+    // Clear canvas
+    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+
+    // Redraw each stroke
+    for (const stroke of strokesData) {
+      if (stroke.points.length === 0) continue;
+
+      // Convert geographic coordinates to screen coordinates
+      const screenPoints: Array<{ x: number; y: number }> = [];
+      for (const latLng of stroke.points) {
+        const screenPoint = latLngToCanvas(latLng);
+        if (screenPoint) {
+          screenPoints.push(screenPoint);
+        }
+      }
+
+      if (screenPoints.length === 0) continue;
+
+      // Scale thickness based on zoom level difference
+      const zoomDiff = currentZoomLevel - stroke.zoom;
+      const scaledThickness = stroke.thickness * Math.pow(2, zoomDiff);
+
+      ctx.beginPath();
+      ctx.strokeStyle = stroke.mode === 'erase' ? 'rgba(0,0,0,1)' : stroke.color;
+      ctx.lineWidth = scaledThickness;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      if (stroke.mode === 'erase') {
+        ctx.globalCompositeOperation = 'destination-out';
+      } else {
+        ctx.globalCompositeOperation = 'source-over';
+      }
+
+      const firstPoint = screenPoints[0];
+      if (!firstPoint) continue;
+
+      if (screenPoints.length === 1) {
+        // Single point - draw a dot
+        ctx.beginPath();
+        ctx.arc(firstPoint.x, firstPoint.y, scaledThickness / 2, 0, Math.PI * 2);
+        ctx.fillStyle = stroke.mode === 'erase' ? 'rgba(0,0,0,1)' : stroke.color;
+        ctx.fill();
+      } else {
+        // Multiple points - draw lines
+        ctx.moveTo(firstPoint.x, firstPoint.y);
+        for (let i = 1; i < screenPoints.length; i++) {
+          const point = screenPoints[i];
+          if (point) {
+            ctx.lineTo(point.x, point.y);
+          }
+        }
+        ctx.stroke();
+      }
+    }
+
+    // Reset composite operation
+    ctx.globalCompositeOperation = 'source-over';
+  }, [getContext, latLngToCanvas]);
+
+  // Redraw when strokes change (undo/redo)
+  useEffect(() => {
+    if (strokes !== undefined) {
+      redrawStrokes(strokes);
+    }
+  }, [strokes, redrawStrokes]);
+
+  // Reload tiles when switching to navigate mode (after drawing), then redraw strokes
+  useEffect(() => {
+    if (drawingState.mode === 'navigate' && canvasId) {
+      const reloadAndRedraw = async () => {
+        await reloadTilesForCurrentView();
+        // Redraw strokes after tiles are loaded to maintain undo/redo state
+        if (strokes !== undefined) {
+          redrawStrokes(strokes);
+        }
+      };
+      void reloadAndRedraw();
+    }
+  }, [drawingState.mode, canvasId, reloadTilesForCurrentView, strokes, redrawStrokes]);
+
+  // Reload tiles after map move in navigate mode, then redraw strokes
+  useEffect(() => {
+    if (!mapRef.current || drawingState.mode !== 'navigate' || !canvasId) return;
+
+    const handleMoveEnd = () => {
+      void (async () => {
+        await reloadTilesForCurrentView();
+        // Redraw strokes after tiles are loaded to maintain undo/redo state
+        if (strokes !== undefined) {
+          redrawStrokes(strokes);
+        }
+      })();
+    };
+
+    const map = mapRef.current;
+    map.on('moveend', handleMoveEnd);
+
+    return () => {
+      map.off('moveend', handleMoveEnd);
+    };
+  }, [drawingState.mode, canvasId, reloadTilesForCurrentView, strokes, redrawStrokes]);
 
   const cursor = drawingState.mode === 'navigate' ? 'grab' : !isDrawableZoom ? 'not-allowed' : drawingState.mode === 'draw' ? 'crosshair' : 'cell';
   const pointerEvents = drawingState.mode === 'navigate' ? 'none' : 'auto';
