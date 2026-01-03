@@ -23,6 +23,9 @@ importers:
       leaflet:
         specifier: ^1.9.4
         version: 1.9.4
+      leaflet-simple-map-screenshoter:
+        specifier: ^0.5.0
+        version: 0.5.0
       nanoid:
         specifier: ^5.0.9
         version: 5.1.6
@@ -914,6 +917,9 @@ packages:
   dom-accessibility-api@0.6.3:
     resolution: {integrity: sha512-7ZgogeTnjuHbo+ct10G9Ffp0mif17idi0IyWNVA/wcwcm7NPOD/WEHVP3n7n3MhXqxoIYm8d6MuZohYWIZ4T3w==}
 
+  dom-to-image-more@2.16.0:
+    resolution: {integrity: sha512-RyjtkaM/zVy90uJ20lT+/G7MwBZx6l/ePliq5CQOeAnPeew7aUGS6IqRWBkHpstU+POmhaKA8A9H9qf476gisQ==}
+
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
     engines: {node: '>= 0.4'}
@@ -985,6 +991,9 @@ packages:
 
   fflate@0.8.2:
     resolution: {integrity: sha512-cPJU47OaAoCbg0pBvzsgpTPhmhqI5eJjh/JIu8tPj5q+T7iLvW/JAYUqmE7KOB4R1ZyEhzBaIQpQpardBF5z8A==}
+
+  file-saver@2.0.5:
+    resolution: {integrity: sha512-P9bmyZ3h/PRG+Nzga+rbdI4OEpNDzAVyy74uVO9ATgzLK6VtAsYybF/+TOCvrc0MO793d6+42lLyZTw7/ArVzA==}
 
   flatted@3.3.3:
     resolution: {integrity: sha512-GX+ysw4PBCz0PzosHDepZGANEuFCMLrnRTiEy9McGjmkCQYwRq4A/X786G/fjM/+OjsWSU1ZrY5qyARZmO/uwg==}
@@ -1118,6 +1127,9 @@ packages:
     resolution: {integrity: sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg==}
     engines: {node: '>=6'}
     hasBin: true
+
+  leaflet-simple-map-screenshoter@0.5.0:
+    resolution: {integrity: sha512-yTrPTenq+ua9X0FaZxM0xHeapA4lM641M4d6V7G0WIStUbN1hGF6SVKdJpfa3PqRBM5ZDdFKfZ4W1F8Djsz2cg==}
 
   leaflet@1.9.4:
     resolution: {integrity: sha512-nxS1ynzJOmOlHp+iL3FyWqK89GtNL8U8rvlMOsQdTTssxZwCXh8N2NB3GDQOL+YR3XnWyZAxwQixURb+FA74PA==}
@@ -2273,6 +2285,8 @@ snapshots:
 
   dom-accessibility-api@0.6.3: {}
 
+  dom-to-image-more@2.16.0: {}
+
   dunder-proto@1.0.1:
     dependencies:
       call-bind-apply-helpers: 1.0.2
@@ -2374,6 +2388,8 @@ snapshots:
       picomatch: 4.0.3
 
   fflate@0.8.2: {}
+
+  file-saver@2.0.5: {}
 
   flatted@3.3.3: {}
 
@@ -2532,6 +2548,11 @@ snapshots:
   jsesc@3.1.0: {}
 
   json5@2.2.3: {}
+
+  leaflet-simple-map-screenshoter@0.5.0:
+    dependencies:
+      dom-to-image-more: 2.16.0
+      file-saver: 2.0.5
 
   leaflet@1.9.4: {}
 

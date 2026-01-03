@@ -122,6 +122,69 @@ export const api = {
       return `${API_BASE_URL}/tiles/${canvasId}/${z}/${x}/${y}.webp`;
     },
   },
+
+  // OGP operations
+  ogp: {
+    // Upload OGP preview image
+    async upload(
+      canvasId: string,
+      image: Blob,
+      placeName: string
+    ): Promise<{
+      success: boolean;
+      imageUrl: string;
+      placeName: string;
+      generatedAt: string;
+    }> {
+      const formData = new FormData();
+      formData.append('image', image, 'preview.png');
+      formData.append('placeName', placeName);
+
+      const res = await fetch(`${API_BASE_URL}/ogp/${canvasId}`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        if (res.status === 413) throw new Error('Image too large');
+        if (res.status === 404) throw new Error('Canvas not found');
+        throw new Error('Failed to upload OGP image');
+      }
+
+      return res.json() as Promise<{
+        success: boolean;
+        imageUrl: string;
+        placeName: string;
+        generatedAt: string;
+      }>;
+    },
+
+    // Get OGP metadata
+    async getMetadata(canvasId: string): Promise<{
+      title: string;
+      description: string;
+      imageUrl: string;
+      pageUrl: string;
+      imageWidth: number;
+      imageHeight: number;
+      siteName: string;
+    }> {
+      const res = await fetch(`${API_BASE_URL}/ogp/${canvasId}`);
+      if (!res.ok) {
+        if (res.status === 404) throw new Error('OGP metadata not found');
+        throw new Error('Failed to get OGP metadata');
+      }
+      return res.json() as Promise<{
+        title: string;
+        description: string;
+        imageUrl: string;
+        pageUrl: string;
+        imageWidth: number;
+        imageHeight: number;
+        siteName: string;
+      }>;
+    },
+  },
 };
 
 export type { Canvas, TileCoordinate, CreateCanvasRequest };

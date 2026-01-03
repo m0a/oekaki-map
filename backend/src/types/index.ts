@@ -10,6 +10,9 @@ export interface Canvas {
   createdAt: string; // ISO8601
   updatedAt: string; // ISO8601
   tileCount: number;
+  ogpImageKey: string | null;
+  ogpPlaceName: string | null;
+  ogpGeneratedAt: string | null;
 }
 
 // Drawing tile - stored in R2 as WebP image
@@ -139,3 +142,31 @@ export interface UpdateLayerResponse {
 // Layer constants
 export const MAX_LAYERS_PER_CANVAS = 10;
 export const MAX_LAYER_NAME_LENGTH = 50;
+
+// OGP types
+export interface OGPMetadata {
+  title: string;
+  description: string;
+  imageUrl: string;
+  pageUrl: string;
+  imageWidth: number;
+  imageHeight: number;
+  siteName: string;
+}
+
+export interface OGPUploadRequest {
+  placeName: string;
+}
+
+export interface OGPUploadResponse {
+  success: boolean;
+  imageUrl: string;
+  placeName: string;
+  generatedAt: string;
+}
+
+// OGP constants
+export const OGP_IMAGE_WIDTH = 1200;
+export const OGP_IMAGE_HEIGHT = 630;
+export const OGP_MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+export const OGP_MAX_PLACE_NAME_LENGTH = 100;

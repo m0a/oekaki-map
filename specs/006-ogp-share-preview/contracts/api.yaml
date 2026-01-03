@@ -1,0 +1,194 @@
+openapi: 3.0.3
+info:
+  title: Oekaki Map OGP API
+  version: 1.0.0
+  description: OGP Share Preview feature API endpoints
+
+paths:
+  /api/ogp/{canvasId}:
+    post:
+      summary: Upload OGP preview image
+      description: |
+        共有ボタンクリック時にフロントエンドから呼び出される。
+        プレビュー画像をR2にアップロードし、キャンバスのOGPメタデータを更新。
+      operationId: uploadOgpImage
+      parameters:
+        - name: canvasId
+          in: path
+          required: true
+          schema:
+            type: string
+            example: abc123
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - image
+                - placeName
+              properties:
+                image:
+                  type: string
+                  format: binary
+                  description: PNG image (1200x630)
+                placeName:
+                  type: string
+                  maxLength: 100
+                  description: 逆ジオコーディングで取得した地名
+                  example: 渋谷区
+      responses:
+        '200':
+          description: OGP image uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OgpUploadResponse'
+        '400':
+          description: Invalid request (missing image, wrong format)
+        '404':
+          description: Canvas not found
+        '413':
+          description: Image too large (max 5MB)
+
+    get:
+      summary: Get OGP metadata for canvas
+      description: |
+        キャンバスのOGPメタデータを取得。
+        バックエンドでHTML生成時に使用。
+      operationId: getOgpMetadata
+      parameters:
+        - name: canvasId
+          in: path
+          required: true
+          schema:
+            type: string
+            example: abc123
+      responses:
+        '200':
+          description: OGP metadata retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OgpMetadata'
+        '404':
+          description: Canvas not found or OGP not generated
+
+  /api/ogp/image/{canvasId}.png:
+    get:
+      summary: Serve OGP image
+      description: |
+        R2からOGP画像を取得して返却。
+        SNSクローラーからのリクエストに対応。
+      operationId: getOgpImage
+      parameters:
+        - name: canvasId
+          in: path
+          required: true
+          schema:
+            type: string
+            example: abc123
+      responses:
+        '200':
+          description: OGP image
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Image not found
+
+  /c/{canvasId}:
+    get:
+      summary: Canvas page with OGP meta tags
+      description: |
+        SNSクローラーの場合: OGPメタタグを含む完全なHTMLを返却
+        ブラウザの場合: SPAシェルを返却（既存動作）
+      operationId: getCanvasPage
+      parameters:
+        - name: canvasId
+          in: path
+          required: true
+          schema:
+            type: string
+            example: abc123
+      responses:
+        '200':
+          description: HTML page with OGP meta tags
+          content:
+            text/html:
+              schema:
+                type: string
+        '404':
+          description: Canvas not found
+
+  /:
+    get:
+      summary: Top page with static OGP meta tags
+      description: |
+        トップページ用の固定OGPメタタグを含むHTMLを返却。
+      operationId: getTopPage
+      responses:
+        '200':
+          description: HTML page with static OGP meta tags
+          content:
+            text/html:
+              schema:
+                type: string
+
+components:
+  schemas:
+    OgpUploadResponse:
+      type: object
+      required:
+        - success
+        - imageUrl
+      properties:
+        success:
+          type: boolean
+          example: true
+        imageUrl:
+          type: string
+          format: uri
+          example: https://example.com/api/ogp/image/abc123.png
+        placeName:
+          type: string
+          example: 渋谷区
+        generatedAt:
+          type: string
+          format: date-time
+          example: "2026-01-04T12:00:00Z"
+
+    OgpMetadata:
+      type: object
+      required:
+        - title
+        - description
+        - imageUrl
+        - pageUrl
+      properties:
+        title:
+          type: string
+          example: 渋谷区周辺のお絵かきマップ
+        description:
+          type: string
+          example: 地図に絵を描いて共有しよう
+        imageUrl:
+          type: string
+          format: uri
+          example: https://example.com/api/ogp/image/abc123.png
+        pageUrl:
+          type: string
+          format: uri
+          example: https://example.com/c/abc123
+        imageWidth:
+          type: integer
+          example: 1200
+        imageHeight:
+          type: integer
+          example: 630
+        siteName:
+          type: string
+          example: お絵かきマップ
