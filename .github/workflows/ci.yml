@@ -179,6 +179,12 @@ jobs:
           name: frontend-dist
           path: frontend/dist/
 
+      - name: Run D1 migrations
+        run: cd backend && pnpm exec wrangler d1 execute oekaki-map-db --remote --file=./src/db/schema.sql
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
       - name: Deploy PR Preview
         run: |
           cd backend
