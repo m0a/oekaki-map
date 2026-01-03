@@ -64,14 +64,17 @@ export function App({ canvasId }: AppProps) {
     if (canvas.canvas?.id) {
       void layers.loadLayers(canvas.canvas.id);
     }
-  }, [canvas.canvas?.id, layers]);
+  }, [canvas.canvas?.id, layers.loadLayers]);
 
-  // Create default layer if canvas has no layers
+  // Create default layer if canvas has no layers (only for existing canvases loaded from server)
+  // Note: For newly created canvases, handleCreateLayer handles the first layer creation
   useEffect(() => {
-    if (canvas.canvas?.id && layers.layers.length === 0 && !layers.isLoading) {
+    // Only run after layers have been loaded (not on initial render)
+    if (canvas.canvas?.id && layers.layers.length === 0 && !layers.isLoading && canvasId) {
+      // Only create default layer for existing canvases (those with a URL canvasId)
       void layers.createDefaultLayerIfNeeded(canvas.canvas.id);
     }
-  }, [canvas.canvas?.id, layers]);
+  }, [canvas.canvas?.id, layers.layers.length, layers.isLoading, canvasId, layers.createDefaultLayerIfNeeded]);
 
   // Layer panel handlers
   const handleToggleLayerPanel = useCallback(() => {
