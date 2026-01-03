@@ -85,4 +85,63 @@ describe('Toolbar', () => {
       expect(onRedo).not.toHaveBeenCalled();
     });
   });
+
+  describe('Color button and popup', () => {
+    it('should render color button with current color', () => {
+      render(<Toolbar {...defaultProps} color="#FF0000" />);
+      const colorButton = screen.getByRole('button', { name: /color picker/i });
+      expect(colorButton).toBeInTheDocument();
+      expect(colorButton).toHaveStyle({ backgroundColor: '#FF0000' });
+    });
+
+    it('should open color popup when color button is clicked', () => {
+      render(<Toolbar {...defaultProps} />);
+      const colorButton = screen.getByRole('button', { name: /color picker/i });
+      fireEvent.click(colorButton);
+      // Check that color options are visible (popup is open)
+      expect(screen.getByRole('button', { name: 'Color #FF0000' })).toBeInTheDocument();
+    });
+
+    it('should close color popup when a color is selected', () => {
+      const onColorChange = vi.fn();
+      render(<Toolbar {...defaultProps} onColorChange={onColorChange} />);
+      const colorButton = screen.getByRole('button', { name: /color picker/i });
+      fireEvent.click(colorButton);
+      // Select a color
+      const redColor = screen.getByRole('button', { name: 'Color #FF0000' });
+      fireEvent.click(redColor);
+      expect(onColorChange).toHaveBeenCalledWith('#FF0000');
+      // Popup should be closed (color options should not be visible)
+      expect(screen.queryByRole('button', { name: 'Color #FF0000' })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Thickness button and popup', () => {
+    it('should render thickness button', () => {
+      render(<Toolbar {...defaultProps} thickness={4} />);
+      const thicknessButton = screen.getByRole('button', { name: /thickness picker/i });
+      expect(thicknessButton).toBeInTheDocument();
+    });
+
+    it('should open thickness popup when thickness button is clicked', () => {
+      render(<Toolbar {...defaultProps} />);
+      const thicknessButton = screen.getByRole('button', { name: /thickness picker/i });
+      fireEvent.click(thicknessButton);
+      // Check that thickness options are visible (popup is open)
+      expect(screen.getByRole('button', { name: 'thin thickness' })).toBeInTheDocument();
+    });
+
+    it('should close thickness popup when a thickness is selected', () => {
+      const onThicknessChange = vi.fn();
+      render(<Toolbar {...defaultProps} onThicknessChange={onThicknessChange} />);
+      const thicknessButton = screen.getByRole('button', { name: /thickness picker/i });
+      fireEvent.click(thicknessButton);
+      // Select a thickness
+      const thinButton = screen.getByRole('button', { name: 'thin thickness' });
+      fireEvent.click(thinButton);
+      expect(onThicknessChange).toHaveBeenCalledWith(2);
+      // Popup should be closed
+      expect(screen.queryByRole('button', { name: 'thin thickness' })).not.toBeInTheDocument();
+    });
+  });
 });

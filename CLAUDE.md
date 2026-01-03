@@ -10,6 +10,8 @@ Auto-generated from all feature plans. Last updated: 2026-01-02
 - TypeScript 5.x (strict mode) + React 18.3.1, Leaflet 1.9.4, Hono 4.6.0, Vite 6.0 (003-layer-structure)
 - Cloudflare D1 (SQLite) + Cloudflare R2 (WebP tiles) (003-layer-structure)
 - TypeScript 5.6 (strict mode) + React 18.3.1, Leaflet 1.9.4, Hono 4.6.0, Vite 6.0 (004-url-share)
+- TypeScript 5.6 (strict mode) + React 18.3.1, Leaflet 1.9.4, Vite 6.0 (005-compact-toolbar)
+- N/A（UIのみの変更） (005-compact-toolbar)
 
 - TypeScript 5.x (strict mode) + React 18+, Vite, Hono, Leaflet, Hono RPC (001-map-drawing-share)
 
@@ -29,9 +31,9 @@ npm test && npm run lint
 TypeScript 5.x (strict mode): Follow standard conventions
 
 ## Recent Changes
+- 005-compact-toolbar: Added TypeScript 5.6 (strict mode) + React 18.3.1, Leaflet 1.9.4, Vite 6.0
 - 004-url-share: Added TypeScript 5.6 (strict mode) + React 18.3.1, Leaflet 1.9.4, Hono 4.6.0, Vite 6.0
 - 003-layer-structure: Added TypeScript 5.x (strict mode) + React 18.3.1, Leaflet 1.9.4, Hono 4.6.0, Vite 6.0
-- 002-undo-redo: Added TypeScript 5.x (strict mode) + React 18+, Leaflet
 
 
 <!-- MANUAL ADDITIONS START -->

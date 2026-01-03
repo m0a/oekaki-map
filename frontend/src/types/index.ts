@@ -88,14 +88,34 @@ export interface Stroke {
 export type ToolType = 'pen' | 'eraser';
 
 export const DEFAULT_COLORS = [
+  // Row 1: Basic colors
   '#000000', // Black
-  '#FF0000', // Red
-  '#0000FF', // Blue
-  '#00FF00', // Green
-  '#FFFF00', // Yellow
-  '#FF8000', // Orange
-  '#8000FF', // Purple
   '#FFFFFF', // White
+  '#808080', // Gray
+  '#C0C0C0', // Silver
+  '#8B4513', // Brown
+  '#D2691E', // Chocolate
+  // Row 2: Reds & Pinks
+  '#FF0000', // Red
+  '#DC143C', // Crimson
+  '#FF6347', // Tomato
+  '#FF69B4', // Hot Pink
+  '#FFB6C1', // Light Pink
+  '#FFC0CB', // Pink
+  // Row 3: Oranges & Yellows
+  '#FF8000', // Orange
+  '#FFA500', // Orange (standard)
+  '#FFD700', // Gold
+  '#FFFF00', // Yellow
+  '#FFFFE0', // Light Yellow
+  '#F0E68C', // Khaki
+  // Row 4: Greens & Blues & Purples
+  '#00FF00', // Lime
+  '#228B22', // Forest Green
+  '#00CED1', // Dark Turquoise
+  '#0000FF', // Blue
+  '#4169E1', // Royal Blue
+  '#8000FF', // Purple
 ] as const;
 
 export const LINE_THICKNESSES = {
@@ -126,6 +146,9 @@ export interface LayersState {
 // Layer constants
 export const MAX_LAYERS_PER_CANVAS = 10;
 export const DEFAULT_LAYER_NAME_PREFIX = 'レイヤー';
+
+// Toolbar popup types
+export type PopupType = 'none' | 'color' | 'thickness';
 
 // Undo/Redo types
 export interface StrokeData {
