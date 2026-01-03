@@ -42,7 +42,7 @@ export function ColorPopup({
         borderRadius: 12,
         boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
         display: 'grid',
-        gridTemplateColumns: 'repeat(4, 1fr)',
+        gridTemplateColumns: 'repeat(6, 1fr)',
         gap: 4,
         zIndex: 1001,
       }}
