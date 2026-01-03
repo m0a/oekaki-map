@@ -7,6 +7,9 @@ CREATE TABLE IF NOT EXISTS canvas (
   center_lat REAL NOT NULL,
   center_lng REAL NOT NULL,
   zoom INTEGER NOT NULL CHECK (zoom >= 1 AND zoom <= 19),
+  share_lat REAL CHECK (share_lat IS NULL OR (share_lat >= -90 AND share_lat <= 90)),
+  share_lng REAL CHECK (share_lng IS NULL OR (share_lng >= -180 AND share_lng <= 180)),
+  share_zoom INTEGER CHECK (share_zoom IS NULL OR (share_zoom >= 1 AND share_zoom <= 19)),
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   tile_count INTEGER NOT NULL DEFAULT 0 CHECK (tile_count >= 0 AND tile_count <= 1000)

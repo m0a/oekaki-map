@@ -6,6 +6,9 @@ export interface Canvas {
   centerLat: number;
   centerLng: number;
   zoom: number;
+  shareLat: number | null;
+  shareLng: number | null;
+  shareZoom: number | null;
   createdAt: string; // ISO8601
   updatedAt: string; // ISO8601
   tileCount: number;

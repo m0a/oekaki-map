@@ -1,4 +1,5 @@
 import { DEFAULT_COLORS, LINE_THICKNESSES, type DrawingState } from '../../types';
+import { ShareButton } from '../ShareButton';
 
 interface ToolbarProps {
   color: string;
@@ -13,6 +14,14 @@ interface ToolbarProps {
   onRedo: () => void;
   isLayerPanelOpen?: boolean;
   onToggleLayerPanel?: () => void;
+  // Share functionality
+  canvasId?: string | undefined;
+  currentPosition?: { lat: number; lng: number; zoom: number } | undefined;
+  onShare?: (() => void) | undefined;
+  isSharing?: boolean | undefined;
+  // Geolocation functionality
+  onGetLocation?: (() => void) | undefined;
+  isGettingLocation?: boolean | undefined;
 }
 
 export function Toolbar({
@@ -28,6 +37,12 @@ export function Toolbar({
   onRedo,
   isLayerPanelOpen,
   onToggleLayerPanel,
+  canvasId,
+  currentPosition,
+  onShare,
+  isSharing,
+  onGetLocation,
+  isGettingLocation,
 }: ToolbarProps) {
   return (
     <div
@@ -234,6 +249,93 @@ export function Toolbar({
             aria-label="Toggle layer panel"
           >
             Layers
+          </button>
+        </>
+      )}
+
+      {/* Share button */}
+      {onShare && canvasId && currentPosition && (
+        <>
+          {/* Separator */}
+          <div
+            style={{
+              width: 1,
+              backgroundColor: '#ddd',
+              margin: '0 4px',
+            }}
+          />
+          <ShareButton
+            canvasId={canvasId}
+            currentPosition={currentPosition}
+            onShare={onShare}
+            isSharing={isSharing ?? false}
+          />
+        </>
+      )}
+
+      {/* Location button */}
+      {onGetLocation && (
+        <>
+          {/* Separator */}
+          <div
+            style={{
+              width: 1,
+              backgroundColor: '#ddd',
+              margin: '0 4px',
+            }}
+          />
+          <button
+            onClick={onGetLocation}
+            disabled={isGettingLocation}
+            style={{
+              padding: '8px 12px',
+              borderRadius: 8,
+              backgroundColor: isGettingLocation ? '#e0e0e0' : '#f0f0f0',
+              color: isGettingLocation ? '#999' : '#333',
+              border: 'none',
+              cursor: isGettingLocation ? 'not-allowed' : 'pointer',
+              fontWeight: 'normal',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minWidth: 44,
+              minHeight: 36,
+            }}
+            aria-label="現在位置"
+            aria-busy={isGettingLocation}
+            title="現在位置に移動"
+          >
+            {isGettingLocation ? (
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 16,
+                  height: 16,
+                  border: '2px solid transparent',
+                  borderTopColor: 'currentColor',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite',
+                }}
+              />
+            ) : (
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                style={{ width: 20, height: 20 }}
+              >
+                {/* Location crosshair icon */}
+                <circle cx="12" cy="12" r="4" />
+                <line x1="12" y1="2" x2="12" y2="6" />
+                <line x1="12" y1="18" x2="12" y2="22" />
+                <line x1="2" y1="12" x2="6" y2="12" />
+                <line x1="18" y1="12" x2="22" y2="12" />
+              </svg>
+            )}
           </button>
         </>
       )}

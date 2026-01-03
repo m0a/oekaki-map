@@ -9,6 +9,8 @@ import { useAutoSave } from './hooks/useAutoSave';
 import { useUndoRedo } from './hooks/useUndoRedo';
 import { useLayers } from './hooks/useLayers';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useShare } from './hooks/useShare';
+import { useGeolocation } from './hooks/useGeolocation';
 import { extractTilesFromCanvas } from './utils/tiles';
 import type { MapPosition, StrokeData } from './types';
 
@@ -31,6 +33,8 @@ export function App({ canvasId }: AppProps) {
   const autoSave = useAutoSave();
   const undoRedo = useUndoRedo();
   const layers = useLayers();
+  const share = useShare();
+  const geolocation = useGeolocation();
 
   // Keyboard shortcuts for undo/redo
   useKeyboardShortcuts({
@@ -41,16 +45,31 @@ export function App({ canvasId }: AppProps) {
   });
 
   // Initialize map position from canvas or default
+  // Priority: share state > center state > default
   useEffect(() => {
     if (isInitialized) return;
 
     if (canvas.canvas) {
-      // Use saved canvas position
-      setMapPosition({
-        lat: canvas.canvas.centerLat,
-        lng: canvas.canvas.centerLng,
-        zoom: canvas.canvas.zoom,
-      });
+      // Use share state if available (for shared URLs), otherwise use center state
+      const hasShareState = canvas.canvas.shareLat !== null &&
+                            canvas.canvas.shareLng !== null &&
+                            canvas.canvas.shareZoom !== null;
+
+      if (hasShareState) {
+        // Use shared position (for users opening a shared URL)
+        setMapPosition({
+          lat: canvas.canvas.shareLat!,
+          lng: canvas.canvas.shareLng!,
+          zoom: canvas.canvas.shareZoom!,
+        });
+      } else {
+        // Use saved canvas position
+        setMapPosition({
+          lat: canvas.canvas.centerLat,
+          lng: canvas.canvas.centerLng,
+          zoom: canvas.canvas.zoom,
+        });
+      }
       setIsInitialized(true);
     } else if (!canvasId && !canvas.isLoading) {
       // New canvas - use default position
@@ -123,6 +142,24 @@ export function App({ canvasId }: AppProps) {
       await layers.reorderLayers(canvas.canvas.id, layerId, newOrder);
     }
   }, [canvas.canvas?.id, layers.reorderLayers]);
+
+  // Share handler
+  const handleShare = useCallback(async () => {
+    if (!canvas.canvas?.id || !mapPosition) return;
+    await share.share(canvas.canvas.id, mapPosition);
+  }, [canvas.canvas?.id, mapPosition, share.share]);
+
+  // Geolocation handler - move map to current position
+  const handleGetLocation = useCallback(async () => {
+    const position = await geolocation.getCurrentPosition();
+    if (position && mapPosition) {
+      setMapPosition({
+        lat: position.lat,
+        lng: position.lng,
+        zoom: mapPosition.zoom, // Keep current zoom level
+      });
+    }
+  }, [geolocation.getCurrentPosition, mapPosition]);
 
   // Compute visible layer IDs for filtering strokes
   const visibleLayerIds = useMemo(() => {
@@ -264,6 +301,12 @@ export function App({ canvasId }: AppProps) {
         onRedo={undoRedo.redo}
         isLayerPanelOpen={isLayerPanelOpen}
         onToggleLayerPanel={handleToggleLayerPanel}
+        canvasId={canvas.canvas?.id}
+        currentPosition={mapPosition ?? undefined}
+        onShare={handleShare}
+        isSharing={share.isSharing}
+        onGetLocation={handleGetLocation}
+        isGettingLocation={geolocation.isLoading}
       />
 
       {/* Layer panel */}
@@ -358,6 +401,68 @@ export function App({ canvasId }: AppProps) {
           }}
         >
           {canvas.error}
+        </div>
+      )}
+
+      {/* Share error */}
+      {share.error && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 16,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            padding: '8px 16px',
+            backgroundColor: 'rgba(220, 53, 69, 0.9)',
+            color: 'white',
+            borderRadius: 8,
+            fontSize: 14,
+            zIndex: 1001,
+          }}
+          onClick={share.clearError}
+        >
+          {share.error}
+        </div>
+      )}
+
+      {/* Clipboard copy success toast */}
+      {share.copied && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 16,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            padding: '8px 16px',
+            backgroundColor: 'rgba(40, 167, 69, 0.9)',
+            color: 'white',
+            borderRadius: 8,
+            fontSize: 14,
+            zIndex: 1001,
+          }}
+        >
+          URLをコピーしました
+        </div>
+      )}
+
+      {/* Geolocation error */}
+      {geolocation.error && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 16,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            padding: '8px 16px',
+            backgroundColor: 'rgba(220, 53, 69, 0.9)',
+            color: 'white',
+            borderRadius: 8,
+            fontSize: 14,
+            zIndex: 1001,
+          }}
+          onClick={geolocation.clearError}
+        >
+          {geolocation.error}
         </div>
       )}
     </div>
