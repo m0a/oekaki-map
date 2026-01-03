@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { DEFAULT_COLORS, LINE_THICKNESSES, type DrawingState, type PopupType } from '../../types';
 import { ShareButton } from '../ShareButton';
 import { IconButton } from './IconButton';
@@ -57,8 +57,18 @@ export function Toolbar({
   isGettingLocation,
 }: ToolbarProps) {
   const [openPopup, setOpenPopup] = useState<PopupType>('none');
+  const [isLandscape, setIsLandscape] = useState(() => window.innerWidth > window.innerHeight);
   const colorPopupRef = useRef<HTMLDivElement>(null);
   const thicknessPopupRef = useRef<HTMLDivElement>(null);
+
+  // Detect orientation change
+  useEffect(() => {
+    const handleResize = () => {
+      setIsLandscape(window.innerWidth > window.innerHeight);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Handle outside click to close popups
   useEffect(() => {
@@ -97,10 +107,15 @@ export function Toolbar({
     setOpenPopup('none');
   };
 
-  // Separator component for vertical layout
+  // Separator component - adapts to layout direction
   const Separator = () => (
     <div
-      style={{
+      style={isLandscape ? {
+        width: 1,
+        height: 32,
+        backgroundColor: '#ddd',
+        margin: '0 4px',
+      } : {
         width: 32,
         height: 1,
         backgroundColor: '#ddd',
@@ -109,24 +124,42 @@ export function Toolbar({
     />
   );
 
+  // Popup position based on orientation
+  const popupPosition = isLandscape ? 'top' : 'left';
+
+  // Container styles based on orientation
+  const containerStyle = useMemo(() => isLandscape ? {
+    position: 'fixed' as const,
+    bottom: 20,
+    left: '50%',
+    transform: 'translateX(-50%)',
+    display: 'flex',
+    flexDirection: 'row' as const,
+    gap: 4,
+    padding: 8,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+    zIndex: 1000,
+    alignItems: 'center',
+  } : {
+    position: 'fixed' as const,
+    right: 10,
+    top: '50%',
+    transform: 'translateY(-50%)',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: 4,
+    padding: 8,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+    zIndex: 1000,
+    alignItems: 'center',
+  }, [isLandscape]);
+
   return (
-    <div
-      style={{
-        position: 'fixed',
-        right: 10,
-        top: '50%',
-        transform: 'translateY(-50%)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 4,
-        padding: 8,
-        backgroundColor: 'white',
-        borderRadius: 12,
-        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-        zIndex: 1000,
-        alignItems: 'center',
-      }}
-    >
+    <div style={containerStyle}>
       {/* Color button with popup */}
       <div ref={colorPopupRef} style={{ position: 'relative' }}>
         <button
@@ -149,7 +182,7 @@ export function Toolbar({
             selectedColor={color}
             onColorSelect={handleColorSelect}
             onClose={() => setOpenPopup('none')}
-            position="left"
+            position={popupPosition}
           />
         )}
       </div>
@@ -188,7 +221,7 @@ export function Toolbar({
             selectedThickness={thickness}
             onThicknessSelect={handleThicknessSelect}
             onClose={() => setOpenPopup('none')}
-            position="left"
+            position={popupPosition}
           />
         )}
       </div>
