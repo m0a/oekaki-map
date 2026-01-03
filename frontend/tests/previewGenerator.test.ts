@@ -18,7 +18,7 @@ describe('Preview Generator', () => {
     it('should convert data URL to Blob', () => {
       const dataURL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
-      const base64 = dataURL.split(',')[1];
+      const base64 = dataURL.split(',')[1] ?? '';
       const binary = atob(base64);
       const array = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) {
