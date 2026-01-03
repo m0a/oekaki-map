@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { OGP_IMAGE_WIDTH, OGP_IMAGE_HEIGHT } from '../src/types/index';
 
 describe('Preview Generator', () => {
