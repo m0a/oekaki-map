@@ -39,6 +39,9 @@ export class CanvasService {
       createdAt: now,
       updatedAt: now,
       tileCount: 0,
+      ogpImageKey: null,
+      ogpPlaceName: null,
+      ogpGeneratedAt: null,
     };
   }
 
@@ -46,7 +49,8 @@ export class CanvasService {
   async get(id: string): Promise<Canvas | null> {
     const result = await this.db
       .prepare(
-        `SELECT id, center_lat, center_lng, zoom, share_lat, share_lng, share_zoom, created_at, updated_at, tile_count
+        `SELECT id, center_lat, center_lng, zoom, share_lat, share_lng, share_zoom,
+                created_at, updated_at, tile_count, ogp_image_key, ogp_place_name, ogp_generated_at
          FROM canvas WHERE id = ?`
       )
       .bind(id)
@@ -61,6 +65,9 @@ export class CanvasService {
         created_at: string;
         updated_at: string;
         tile_count: number;
+        ogp_image_key: string | null;
+        ogp_place_name: string | null;
+        ogp_generated_at: string | null;
       }>();
 
     if (!result) return null;
@@ -76,6 +83,9 @@ export class CanvasService {
       createdAt: result.created_at,
       updatedAt: result.updated_at,
       tileCount: result.tile_count,
+      ogpImageKey: result.ogp_image_key,
+      ogpPlaceName: result.ogp_place_name,
+      ogpGeneratedAt: result.ogp_generated_at,
     };
   }
 
