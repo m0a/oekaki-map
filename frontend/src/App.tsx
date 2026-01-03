@@ -79,10 +79,20 @@ export function App({ canvasId }: AppProps) {
   }, []);
 
   const handleCreateLayer = useCallback(async () => {
-    if (canvas.canvas?.id) {
-      await layers.createLayer(canvas.canvas.id);
+    let canvasId = canvas.canvas?.id;
+    // Create canvas if it doesn't exist
+    if (!canvasId && mapPosition) {
+      try {
+        canvasId = await canvas.createCanvas(mapPosition);
+      } catch (err) {
+        console.error('Failed to create canvas:', err);
+        return;
+      }
     }
-  }, [canvas.canvas?.id, layers.createLayer]);
+    if (canvasId) {
+      await layers.createLayer(canvasId);
+    }
+  }, [canvas, mapPosition, layers.createLayer]);
 
   const handleToggleLayerVisibility = useCallback(async (layerId: string) => {
     if (canvas.canvas?.id) {
@@ -151,6 +161,10 @@ export function App({ canvasId }: AppProps) {
         if (!mapPosition) return;
         try {
           currentCanvasId = await canvas.createCanvas(mapPosition);
+          // Create default layer for new canvas
+          if (currentCanvasId) {
+            await layers.createDefaultLayerIfNeeded(currentCanvasId);
+          }
         } catch (err) {
           console.error('Failed to create canvas:', err);
           return;
