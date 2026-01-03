@@ -533,12 +533,14 @@ export function MapWithDrawing({
   useEffect(() => {
     if (!mapRef.current || drawingState.mode !== 'navigate' || !canvasId) return;
 
-    const handleMoveEnd = async () => {
-      await reloadTilesForCurrentView();
-      // Redraw strokes after tiles are loaded to maintain undo/redo state
-      if (strokes !== undefined) {
-        redrawStrokes(strokes);
-      }
+    const handleMoveEnd = () => {
+      void (async () => {
+        await reloadTilesForCurrentView();
+        // Redraw strokes after tiles are loaded to maintain undo/redo state
+        if (strokes !== undefined) {
+          redrawStrokes(strokes);
+        }
+      })();
     };
 
     const map = mapRef.current;
