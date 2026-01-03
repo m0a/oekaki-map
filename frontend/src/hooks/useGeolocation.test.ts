@@ -7,7 +7,9 @@ type PositionCallback = (position: GeolocationPosition) => void;
 type ErrorCallback = (error: GeolocationPositionError) => void;
 
 // Mock navigator.geolocation
-const mockGetCurrentPosition = vi.fn<[PositionCallback, ErrorCallback?, PositionOptions?], undefined>();
+const mockGetCurrentPosition = vi.fn() as ReturnType<typeof vi.fn> & {
+  (success: PositionCallback, error?: ErrorCallback, options?: PositionOptions): void;
+};
 const mockGeolocation = {
   getCurrentPosition: mockGetCurrentPosition,
 };
