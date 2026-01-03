@@ -97,14 +97,27 @@ export function Toolbar({
     setOpenPopup('none');
   };
 
+  // Separator component for vertical layout
+  const Separator = () => (
+    <div
+      style={{
+        width: 32,
+        height: 1,
+        backgroundColor: '#ddd',
+        margin: '4px 0',
+      }}
+    />
+  );
+
   return (
     <div
       style={{
         position: 'fixed',
-        bottom: 20,
-        left: '50%',
-        transform: 'translateX(-50%)',
+        right: 10,
+        top: '50%',
+        transform: 'translateY(-50%)',
         display: 'flex',
+        flexDirection: 'column',
         gap: 4,
         padding: 8,
         backgroundColor: 'white',
@@ -136,19 +149,10 @@ export function Toolbar({
             selectedColor={color}
             onColorSelect={handleColorSelect}
             onClose={() => setOpenPopup('none')}
+            position="left"
           />
         )}
       </div>
-
-      {/* Separator */}
-      <div
-        style={{
-          width: 1,
-          height: 32,
-          backgroundColor: '#ddd',
-          margin: '0 4px',
-        }}
-      />
 
       {/* Thickness button with popup */}
       <div ref={thicknessPopupRef} style={{ position: 'relative' }}>
@@ -184,90 +188,63 @@ export function Toolbar({
             selectedThickness={thickness}
             onThicknessSelect={handleThicknessSelect}
             onClose={() => setOpenPopup('none')}
+            position="left"
           />
         )}
       </div>
 
-      {/* Separator */}
-      <div
-        style={{
-          width: 1,
-          height: 32,
-          backgroundColor: '#ddd',
-          margin: '0 4px',
-        }}
-      />
+      <Separator />
 
       {/* Undo/Redo buttons - Icon only */}
-      <div style={{ display: 'flex', gap: 4 }}>
-        <IconButton
-          icon={<UndoIcon size={20} />}
-          label="Undo"
-          tooltip="元に戻す"
-          onClick={onUndo}
-          disabled={!canUndo}
-          size={36}
-        />
-        <IconButton
-          icon={<RedoIcon size={20} />}
-          label="Redo"
-          tooltip="やり直し"
-          onClick={onRedo}
-          disabled={!canRedo}
-          size={36}
-        />
-      </div>
-
-      {/* Separator */}
-      <div
-        style={{
-          width: 1,
-          height: 32,
-          backgroundColor: '#ddd',
-          margin: '0 4px',
-        }}
+      <IconButton
+        icon={<UndoIcon size={20} />}
+        label="Undo"
+        tooltip="元に戻す"
+        onClick={onUndo}
+        disabled={!canUndo}
+        size={36}
+      />
+      <IconButton
+        icon={<RedoIcon size={20} />}
+        label="Redo"
+        tooltip="やり直し"
+        onClick={onRedo}
+        disabled={!canRedo}
+        size={36}
       />
 
+      <Separator />
+
       {/* Mode toggle - Icon buttons */}
-      <div style={{ display: 'flex', gap: 4 }}>
-        <IconButton
-          icon={<PencilIcon size={20} />}
-          label="Draw"
-          tooltip="描画"
-          onClick={() => onModeChange('draw')}
-          isActive={mode === 'draw'}
-          size={36}
-        />
-        <IconButton
-          icon={<EraserIcon size={20} />}
-          label="Erase"
-          tooltip="消去"
-          onClick={() => onModeChange('erase')}
-          isActive={mode === 'erase'}
-          size={36}
-        />
-        <IconButton
-          icon={<HandIcon size={20} />}
-          label="Move"
-          tooltip="移動"
-          onClick={() => onModeChange('navigate')}
-          isActive={mode === 'navigate'}
-          size={36}
-        />
-      </div>
+      <IconButton
+        icon={<PencilIcon size={20} />}
+        label="Draw"
+        tooltip="描画"
+        onClick={() => onModeChange('draw')}
+        isActive={mode === 'draw'}
+        size={36}
+      />
+      <IconButton
+        icon={<EraserIcon size={20} />}
+        label="Erase"
+        tooltip="消去"
+        onClick={() => onModeChange('erase')}
+        isActive={mode === 'erase'}
+        size={36}
+      />
+      <IconButton
+        icon={<HandIcon size={20} />}
+        label="Move"
+        tooltip="移動"
+        onClick={() => onModeChange('navigate')}
+        isActive={mode === 'navigate'}
+        size={36}
+      />
 
       {/* Layer panel toggle button */}
       {onToggleLayerPanel && (
         <>
-          {/* Separator */}
-          <div
-            style={{
-              width: 1,
-              height: 32,
-              backgroundColor: '#ddd',
-              margin: '0 4px',
-            }}
-          />
+          <Separator />
           <IconButton
             icon={<LayersIcon size={20} />}
             label="Toggle layer panel"
@@ -282,15 +259,7 @@ export function Toolbar({
       {/* Share button */}
       {onShare && canvasId && currentPosition && (
         <>
-          {/* Separator */}
-          <div
-            style={{
-              width: 1,
-              height: 32,
-              backgroundColor: '#ddd',
-              margin: '0 4px',
-            }}
-          />
+          <Separator />
           <ShareButton
             canvasId={canvasId}
             currentPosition={currentPosition}
@@ -302,68 +271,57 @@ export function Toolbar({
 
       {/* Location button */}
       {onGetLocation && (
-        <>
-          {/* Separator */}
-          <div
-            style={{
-              width: 1,
-              height: 32,
-              backgroundColor: '#ddd',
-              margin: '0 4px',
-            }}
-          />
-          <button
-            onClick={onGetLocation}
-            disabled={isGettingLocation}
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 8,
-              backgroundColor: isGettingLocation ? '#e0e0e0' : '#f0f0f0',
-              color: isGettingLocation ? '#999' : '#333',
-              border: 'none',
-              cursor: isGettingLocation ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: 0,
-            }}
-            aria-label="現在位置"
-            aria-busy={isGettingLocation}
-            title="現在位置に移動"
-          >
-            {isGettingLocation ? (
-              <span
-                aria-hidden="true"
-                style={{
-                  width: 16,
-                  height: 16,
-                  border: '2px solid transparent',
-                  borderTopColor: 'currentColor',
-                  borderRadius: '50%',
-                  animation: 'spin 1s linear infinite',
-                }}
-              />
-            ) : (
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-                style={{ width: 20, height: 20 }}
-              >
-                <circle cx="12" cy="12" r="4" />
-                <line x1="12" y1="2" x2="12" y2="6" />
-                <line x1="12" y1="18" x2="12" y2="22" />
-                <line x1="2" y1="12" x2="6" y2="12" />
-                <line x1="18" y1="12" x2="22" y2="12" />
-              </svg>
-            )}
-          </button>
-        </>
+        <button
+          onClick={onGetLocation}
+          disabled={isGettingLocation}
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 8,
+            backgroundColor: isGettingLocation ? '#e0e0e0' : '#f0f0f0',
+            color: isGettingLocation ? '#999' : '#333',
+            border: 'none',
+            cursor: isGettingLocation ? 'not-allowed' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 0,
+          }}
+          aria-label="現在位置"
+          aria-busy={isGettingLocation}
+          title="現在位置に移動"
+        >
+          {isGettingLocation ? (
+            <span
+              aria-hidden="true"
+              style={{
+                width: 16,
+                height: 16,
+                border: '2px solid transparent',
+                borderTopColor: 'currentColor',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite',
+              }}
+            />
+          ) : (
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+              style={{ width: 20, height: 20 }}
+            >
+              <circle cx="12" cy="12" r="4" />
+              <line x1="12" y1="2" x2="12" y2="6" />
+              <line x1="12" y1="18" x2="12" y2="22" />
+              <line x1="2" y1="12" x2="6" y2="12" />
+              <line x1="18" y1="12" x2="22" y2="12" />
+            </svg>
+          )}
+        </button>
       )}
     </div>
   );

@@ -81,8 +81,8 @@ export function LayerPanel({
       className="layer-panel"
       style={{
         position: 'absolute',
-        right: '10px',
-        top: '60px',
+        left: '10px',
+        top: '10px',
         width: '250px',
         backgroundColor: 'white',
         borderRadius: '8px',
@@ -90,7 +90,7 @@ export function LayerPanel({
         zIndex: 1000,
         display: 'flex',
         flexDirection: 'column',
-        maxHeight: 'calc(100vh - 120px)',
+        maxHeight: 'calc(100vh - 80px)',
       }}
     >
       {/* Header */}

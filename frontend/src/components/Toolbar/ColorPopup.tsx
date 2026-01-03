@@ -3,6 +3,7 @@ interface ColorPopupProps {
   selectedColor: string;
   onColorSelect: (color: string) => void;
   onClose: () => void;
+  position?: 'top' | 'left';
 }
 
 export function ColorPopup({
@@ -10,20 +11,32 @@ export function ColorPopup({
   selectedColor,
   onColorSelect,
   onClose,
+  position = 'top',
 }: ColorPopupProps) {
   const handleColorClick = (color: string) => {
     onColorSelect(color);
     onClose();
   };
 
-  return (
-    <div
-      style={{
-        position: 'absolute',
+  const positionStyles = position === 'left'
+    ? {
+        right: '100%',
+        top: '50%',
+        transform: 'translateY(-50%)',
+        marginRight: 8,
+      }
+    : {
         bottom: '100%',
         left: '50%',
         transform: 'translateX(-50%)',
         marginBottom: 8,
+      };
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        ...positionStyles,
         padding: 8,
         backgroundColor: 'white',
         borderRadius: 12,

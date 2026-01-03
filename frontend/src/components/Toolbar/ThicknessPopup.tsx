@@ -3,6 +3,7 @@ interface ThicknessPopupProps {
   selectedThickness: number;
   onThicknessSelect: (thickness: number) => void;
   onClose: () => void;
+  position?: 'top' | 'left';
 }
 
 export function ThicknessPopup({
@@ -10,20 +11,34 @@ export function ThicknessPopup({
   selectedThickness,
   onThicknessSelect,
   onClose,
+  position = 'top',
 }: ThicknessPopupProps) {
   const handleThicknessClick = (thickness: number) => {
     onThicknessSelect(thickness);
     onClose();
   };
 
-  return (
-    <div
-      style={{
-        position: 'absolute',
+  const positionStyles = position === 'left'
+    ? {
+        right: '100%',
+        top: '50%',
+        transform: 'translateY(-50%)',
+        marginRight: 8,
+        flexDirection: 'column' as const,
+      }
+    : {
         bottom: '100%',
         left: '50%',
         transform: 'translateX(-50%)',
         marginBottom: 8,
+        flexDirection: 'row' as const,
+      };
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        ...positionStyles,
         padding: 8,
         backgroundColor: 'white',
         borderRadius: 12,
