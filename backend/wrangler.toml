@@ -25,6 +25,15 @@ ENVIRONMENT = "production"
 port = 8787
 local_protocol = "http"
 
-# Production environment
-[env.production]
-vars = { ENVIRONMENT = "production" }
+# Preview environment (for main preview and PR previews)
+[env.preview]
+vars = { ENVIRONMENT = "preview" }
+
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "oekaki-map-db-preview"
+database_id = "0ce6fa3b-4f36-42ee-844b-89fb1728c5e4"
+
+[[env.preview.r2_buckets]]
+binding = "TILES"
+bucket_name = "oekaki-map-tiles-preview"
