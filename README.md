@@ -232,14 +232,33 @@ pnpm exec wrangler d1 migrations list DB --remote
 
 ### 本番リリース手順
 
+Claude Codeの `/release` コマンドを使用（推奨）:
+
+```bash
+# Claude Codeで実行
+/release
+```
+
+このコマンドは自動的に:
+1. 最新タグを取得
+2. 次のパッチバージョンを計算（例: v0.0.11 → v0.0.12）
+3. 変更内容をプレビュー表示
+4. タグ作成・プッシュ
+5. GitHub リリース作成
+6. デプロイ完了を監視
+
+手動でリリースする場合:
 ```bash
 # 1. mainブランチを最新に
 git checkout main
 git pull origin main
 
-# 2. タグを作成してプッシュ
-git tag v0.0.11 -m "Release description"
-git push origin v0.0.11
+# 2. 最新タグを確認
+git tag -l --sort=-version:refname | head -1
+
+# 3. 次のバージョンでタグを作成してプッシュ
+git tag v0.0.12
+git push origin v0.0.12
 ```
 
 ## 設計ドキュメント
