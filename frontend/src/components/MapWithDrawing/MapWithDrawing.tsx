@@ -393,29 +393,19 @@ export function MapWithDrawing({
       canvasRef.current.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
     });
 
-    // Update zoom state and reset transform on zoom end
+    // Update zoom state on zoom end (transform reset happens after redraw in moveend handler)
     map.on('zoomend', () => {
       setCurrentZoom(map.getZoom());
-
-      // Reset canvas transform (will be redrawn at correct position/scale)
-      if (canvasRef.current) {
-        canvasRef.current.style.transform = '';
-        canvasRef.current.style.transformOrigin = '';
-      }
+      // Note: transform reset is handled by moveend handler after redraw to avoid flicker
     });
 
-    // On map move end, reset transform and update position
+    // On map move end, update position (transform reset happens after redraw)
     map.on('moveend', () => {
       const center = map.getCenter();
       const zoom = map.getZoom();
       setCurrentZoom(zoom);
 
-      // Reset canvas transform (will be redrawn at correct position)
-      if (canvasRef.current) {
-        canvasRef.current.style.transform = '';
-      }
-
-      // Update canvas origin
+      // Update canvas origin (transform will be reset after redraw to avoid flicker)
       canvasOriginRef.current = center;
       canvasZoomRef.current = zoom;
 
@@ -647,6 +637,11 @@ export function MapWithDrawing({
         // Redraw strokes after tiles are loaded to maintain undo/redo state
         if (strokes !== undefined) {
           redrawStrokes(strokes, visibleLayerIds);
+        }
+        // Reset transform AFTER redraw to avoid flicker
+        if (canvasRef.current) {
+          canvasRef.current.style.transform = '';
+          canvasRef.current.style.transformOrigin = '';
         }
       })();
     };
