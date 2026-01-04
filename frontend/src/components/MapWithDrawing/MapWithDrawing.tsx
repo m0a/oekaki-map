@@ -344,16 +344,62 @@ export function MapWithDrawing({
     containerRef.current.appendChild(canvas);
     canvasRef.current = canvas;
 
-    // Update zoom state
-    map.on('zoomend', () => {
-      setCurrentZoom(map.getZoom());
+    // Sync canvas transform with map during drag (for smooth tile following)
+    map.on('move', () => {
+      if (!canvasRef.current) return;
+      const tilePane = map.getPane('tilePane');
+      if (tilePane) {
+        // Copy the tilePane's transform to the canvas for real-time sync
+        canvasRef.current.style.transform = tilePane.style.transform;
+      }
     });
 
-    // On map move end, update position
+    // Sync canvas scale with map during zoom (for smooth tile scaling)
+    map.on('zoom', () => {
+      if (!canvasRef.current || !canvasZoomRef.current) return;
+
+      // Calculate scale factor between current zoom and canvas origin zoom
+      const currentZoomLevel = map.getZoom();
+      const scale = Math.pow(2, currentZoomLevel - canvasZoomRef.current);
+
+      // Get the zoom center point for transform-origin
+      const center = map.getCenter();
+      const containerPoint = map.latLngToContainerPoint(center);
+
+      // Set transform-origin to zoom center
+      canvasRef.current.style.transformOrigin = `${containerPoint.x}px ${containerPoint.y}px`;
+
+      // Apply scale transform (combine with any existing translate from pan)
+      const tilePane = map.getPane('tilePane');
+      if (tilePane && tilePane.style.transform) {
+        // If there's a translate transform, combine with scale
+        canvasRef.current.style.transform = `${tilePane.style.transform} scale(${scale})`;
+      } else {
+        canvasRef.current.style.transform = `scale(${scale})`;
+      }
+    });
+
+    // Update zoom state and reset transform on zoom end
+    map.on('zoomend', () => {
+      setCurrentZoom(map.getZoom());
+
+      // Reset canvas transform (will be redrawn at correct position/scale)
+      if (canvasRef.current) {
+        canvasRef.current.style.transform = '';
+        canvasRef.current.style.transformOrigin = '';
+      }
+    });
+
+    // On map move end, reset transform and update position
     map.on('moveend', () => {
       const center = map.getCenter();
       const zoom = map.getZoom();
       setCurrentZoom(zoom);
+
+      // Reset canvas transform (will be redrawn at correct position)
+      if (canvasRef.current) {
+        canvasRef.current.style.transform = '';
+      }
 
       // Update canvas origin
       canvasOriginRef.current = center;
