@@ -344,10 +344,9 @@ export function MapWithDrawing({
     containerRef.current.appendChild(canvas);
     canvasRef.current = canvas;
 
-    // Unified transform sync function for both pan and zoom
-    const syncCanvasTransform = () => {
+    // Sync canvas position during pan (drag)
+    const syncCanvasPan = () => {
       if (!canvasRef.current || !canvasOriginRef.current) return;
-      // Note: canvasZoomRef.current can be 0, so check !== null instead
       if (canvasZoomRef.current === null) return;
 
       const canvas = canvasRef.current;
@@ -355,27 +354,49 @@ export function MapWithDrawing({
       const centerX = canvasRect.width / 2;
       const centerY = canvasRect.height / 2;
 
-      // Calculate scale factor
-      const currentZoomLevel = map.getZoom();
-      const scale = Math.pow(2, currentZoomLevel - canvasZoomRef.current);
-
-      // Where is the canvas origin (the point drawn at canvas center) NOW on screen?
+      // Where is the canvas origin NOW on screen?
       const originPos = map.latLngToContainerPoint(canvasOriginRef.current);
-
-      // The content was drawn with canvasOriginRef at (centerX, centerY).
-      // After scaling around (centerX, centerY), canvasOriginRef is still at (centerX, centerY).
-      // We need to translate so it appears at originPos.
       const dx = originPos.x - centerX;
       const dy = originPos.y - centerY;
 
-      // Use transform-origin at canvas center (where content was drawn centered)
+      // Calculate scale (in case we're in the middle of a zoom)
+      const currentZoomLevel = map.getZoom();
+      const scale = Math.pow(2, currentZoomLevel - canvasZoomRef.current);
+
       canvas.style.transformOrigin = `${centerX}px ${centerY}px`;
       canvas.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
     };
 
-    // Sync canvas transform during both pan and zoom
-    map.on('move', syncCanvasTransform);
-    map.on('zoom', syncCanvasTransform);
+    // Handle zoom animation using Leaflet's zoomanim event
+    // This event provides the zoom center and target zoom level
+    const handleZoomAnim = (e: L.ZoomAnimEvent) => {
+      if (!canvasRef.current || !canvasOriginRef.current) return;
+      if (canvasZoomRef.current === null) return;
+
+      const canvas = canvasRef.current;
+      const canvasRect = canvas.getBoundingClientRect();
+      const centerX = canvasRect.width / 2;
+      const centerY = canvasRect.height / 2;
+
+      // e.zoom is the TARGET zoom level
+      const scale = Math.pow(2, e.zoom - canvasZoomRef.current);
+
+      // e.center is the target center, calculate where origin will be
+      // For now, use current position as approximation
+      const originPos = map.latLngToContainerPoint(canvasOriginRef.current);
+      const dx = originPos.x - centerX;
+      const dy = originPos.y - centerY;
+
+      canvas.style.transformOrigin = `${centerX}px ${centerY}px`;
+      canvas.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
+    };
+
+    // Sync canvas transform during pan
+    map.on('move', syncCanvasPan);
+    // Use zoomanim for animated zoom (scroll wheel, pinch)
+    map.on('zoomanim', handleZoomAnim);
+    // Also handle zoom event for non-animated zoom changes
+    map.on('zoom', syncCanvasPan);
 
     // Update zoom state on zoom end (transform reset happens after redraw in moveend handler)
     map.on('zoomend', () => {
