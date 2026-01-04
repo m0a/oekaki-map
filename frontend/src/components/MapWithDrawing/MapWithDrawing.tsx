@@ -391,25 +391,10 @@ export function MapWithDrawing({
       const eventWithOrigin = e as L.ZoomAnimEvent & { origin?: L.Point };
       const zoomOrigin = eventWithOrigin.origin || { x: centerX, y: centerY };
 
-      // The canvas content was drawn with canvasOriginRef at canvas center
-      // During zoom around zoomOrigin, points scale relative to zoomOrigin
-      // Formula: newPos = zoomOrigin + (oldPos - zoomOrigin) * scale
-
-      // Canvas center (where origin was drawn) relative to zoom origin
-      const oldOffsetX = centerX - zoomOrigin.x;
-      const oldOffsetY = centerY - zoomOrigin.y;
-
-      // After scaling, the canvas center moves
-      const newCenterX = zoomOrigin.x + oldOffsetX * targetScale;
-      const newCenterY = zoomOrigin.y + oldOffsetY * targetScale;
-
-      // We need the canvas to be positioned so its visual center is at newCenter
-      // The transform-origin is at canvas center, so we translate from there
-      const dx = newCenterX - centerX;
-      const dy = newCenterY - centerY;
-
+      // Simply scale around the zoom origin point
+      // The zoom origin stays fixed, and everything else scales relative to it
       canvas.style.transformOrigin = `${zoomOrigin.x}px ${zoomOrigin.y}px`;
-      canvas.style.transform = `scale(${targetScale}) translate(${dx / targetScale}px, ${dy / targetScale}px)`;
+      canvas.style.transform = `scale(${targetScale})`;
     };
 
     // Reset zoom animation flag on zoom end
