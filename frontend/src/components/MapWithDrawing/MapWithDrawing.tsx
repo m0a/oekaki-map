@@ -344,18 +344,52 @@ export function MapWithDrawing({
     containerRef.current.appendChild(canvas);
     canvasRef.current = canvas;
 
-    // Update zoom state
-    map.on('zoomend', () => {
-      setCurrentZoom(map.getZoom());
-    });
+    // Sync canvas transform during pan
+    const syncCanvasPan = () => {
+      if (!canvasRef.current || !canvasOriginRef.current) return;
+      if (canvasZoomRef.current === null) return;
 
-    // On map move end, update position
+      const canvas = canvasRef.current;
+      const rect = canvas.getBoundingClientRect();
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+
+      // Where should the canvas origin appear on screen now?
+      const originPos = map.latLngToContainerPoint(canvasOriginRef.current);
+
+      // Translate to move canvas center to where origin should be
+      const dx = originPos.x - centerX;
+      const dy = originPos.y - centerY;
+
+      // Apply transform
+      canvas.style.transform = `translate(${dx}px, ${dy}px)`;
+    };
+
+    // Hide canvas during zoom (zoom animation is too complex to sync properly)
+    const handleZoomStart = () => {
+      if (canvasRef.current) {
+        canvasRef.current.style.opacity = '0';
+      }
+    };
+
+    // Show canvas after zoom ends (will be redrawn by moveend handler)
+    const handleZoomEnd = () => {
+      setCurrentZoom(map.getZoom());
+      // Canvas will be shown after redraw in moveend handler
+    };
+
+    // Listen to events
+    map.on('move', syncCanvasPan);
+    map.on('zoomstart', handleZoomStart);
+    map.on('zoomend', handleZoomEnd);
+
+    // On map move end, update position (transform reset happens after redraw)
     map.on('moveend', () => {
       const center = map.getCenter();
       const zoom = map.getZoom();
       setCurrentZoom(zoom);
 
-      // Update canvas origin
+      // Update canvas origin (transform will be reset after redraw to avoid flicker)
       canvasOriginRef.current = center;
       canvasZoomRef.current = zoom;
 
@@ -587,6 +621,12 @@ export function MapWithDrawing({
         // Redraw strokes after tiles are loaded to maintain undo/redo state
         if (strokes !== undefined) {
           redrawStrokes(strokes, visibleLayerIds);
+        }
+        // Reset transform and show canvas AFTER redraw
+        if (canvasRef.current) {
+          canvasRef.current.style.transform = '';
+          canvasRef.current.style.transformOrigin = '';
+          canvasRef.current.style.opacity = '1'; // Show canvas after redraw
         }
       })();
     };
