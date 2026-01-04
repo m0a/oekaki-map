@@ -109,12 +109,14 @@ async function extractTileFromCanvas(
   // The source area on the original canvas
   // Tile is TILE_DIMENSION pixels at targetZoom, so at canvasZoom it's TILE_DIMENSION/scale
   const srcTileSize = TILE_DIMENSION / scale;
-  const srcX = canvasCenterX + offsetX - srcTileSize / 2;
-  const srcY = canvasCenterY + offsetY - srcTileSize / 2;
+  // Round coordinates to integers to ensure consistent positioning with loading code
+  const srcX = Math.round(canvasCenterX + offsetX - srcTileSize / 2);
+  const srcY = Math.round(canvasCenterY + offsetY - srcTileSize / 2);
+  const srcSize = Math.round(srcTileSize);
 
   // Check if source area is within canvas bounds and has content
-  if (srcX + srcTileSize < 0 || srcX > canvasWidth ||
-      srcY + srcTileSize < 0 || srcY > canvasHeight) {
+  if (srcX + srcSize < 0 || srcX > canvasWidth ||
+      srcY + srcSize < 0 || srcY > canvasHeight) {
     return null;
   }
 
@@ -122,10 +124,10 @@ async function extractTileFromCanvas(
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
 
-  const checkX = Math.max(0, Math.floor(srcX));
-  const checkY = Math.max(0, Math.floor(srcY));
-  const checkWidth = Math.min(Math.ceil(srcTileSize), canvasWidth - checkX);
-  const checkHeight = Math.min(Math.ceil(srcTileSize), canvasHeight - checkY);
+  const checkX = Math.max(0, srcX);
+  const checkY = Math.max(0, srcY);
+  const checkWidth = Math.min(srcSize, canvasWidth - checkX);
+  const checkHeight = Math.min(srcSize, canvasHeight - checkY);
 
   if (checkWidth <= 0 || checkHeight <= 0) return null;
 
@@ -144,7 +146,7 @@ async function extractTileFromCanvas(
   // Draw the portion of the canvas onto the tile
   tileCtx.drawImage(
     canvas,
-    srcX, srcY, srcTileSize, srcTileSize,
+    srcX, srcY, srcSize, srcSize,
     0, 0, TILE_DIMENSION, TILE_DIMENSION
   );
 
@@ -159,7 +161,7 @@ async function extractTileFromCanvas(
 }
 
 // Project lat/lng to pixel coordinates at given zoom (Web Mercator)
-function projectToPixel(lat: number, lng: number, zoom: number): { x: number; y: number } {
+export function projectToPixel(lat: number, lng: number, zoom: number): { x: number; y: number } {
   const scale = Math.pow(2, zoom) * 256;
   const x = ((lng + 180) / 360) * scale;
   const latRad = (lat * Math.PI) / 180;

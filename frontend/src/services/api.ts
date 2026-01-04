@@ -117,9 +117,16 @@ export const api = {
       return res.json() as Promise<SaveTilesResponse>;
     },
 
-    // Get tile image URL
-    getImageUrl(canvasId: string, z: number, x: number, y: number): string {
-      return `${API_BASE_URL}/tiles/${canvasId}/${z}/${x}/${y}.webp`;
+    // Get tile image URL with optional cache version
+    getImageUrl(
+      canvasId: string,
+      z: number,
+      x: number,
+      y: number,
+      updatedAt?: string
+    ): string {
+      const base = `${API_BASE_URL}/tiles/${canvasId}/${z}/${x}/${y}.webp`;
+      return updatedAt ? `${base}?v=${updatedAt}` : base;
     },
   },
 

@@ -2,6 +2,7 @@ import { nanoid } from 'nanoid';
 import type {
   Canvas,
   TileCoordinate,
+  TileCoordinateWithVersion,
   CreateCanvasRequest,
   UpdateCanvasRequest,
   Env,
@@ -128,17 +129,18 @@ export class CanvasService {
     };
   }
 
-  // Get all tile coordinates for a canvas
-  async getTileCoordinates(canvasId: string): Promise<TileCoordinate[]> {
+  // Get all tile coordinates for a canvas (with updatedAt for cache versioning)
+  async getTileCoordinates(canvasId: string): Promise<TileCoordinateWithVersion[]> {
     const results = await this.db
-      .prepare(`SELECT z, x, y FROM drawing_tile WHERE canvas_id = ?`)
+      .prepare(`SELECT z, x, y, updated_at FROM drawing_tile WHERE canvas_id = ?`)
       .bind(canvasId)
-      .all<{ z: number; x: number; y: number }>();
+      .all<{ z: number; x: number; y: number; updated_at: string }>();
 
     return results.results.map((row) => ({
       z: row.z,
       x: row.x,
       y: row.y,
+      updatedAt: row.updated_at,
     }));
   }
 

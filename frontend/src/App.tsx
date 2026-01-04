@@ -194,7 +194,17 @@ export function App({ canvasId }: AppProps) {
   // Handle stroke end - save canvas state and add to undo history
   const handleStrokeEnd = useCallback(
     async (canvasElement: HTMLCanvasElement, bounds: L.LatLngBounds, zoom: number, strokeData?: StrokeData) => {
-      // Add stroke to undo history if provided
+      // IMPORTANT: Capture canvas content BEFORE updating undo state
+      // This prevents race condition where redrawAll modifies canvas before extraction
+      const canvasCopy = document.createElement('canvas');
+      canvasCopy.width = canvasElement.width;
+      canvasCopy.height = canvasElement.height;
+      const copyCtx = canvasCopy.getContext('2d');
+      if (copyCtx) {
+        copyCtx.drawImage(canvasElement, 0, 0);
+      }
+
+      // Now safe to add stroke to undo history (this triggers redrawAll)
       if (strokeData && strokeData.points.length > 0) {
         undoRedo.push(strokeData);
       }
@@ -224,8 +234,9 @@ export function App({ canvasId }: AppProps) {
       const canvasIdToSave = currentCanvasId;
       autoSave.scheduleSave(async () => {
         try {
+          // Use the captured canvas copy instead of live canvas element
           const tiles = await extractTilesFromCanvas(
-            canvasElement,
+            canvasCopy,
             boundsCenter,
             zoom,
             targetZoom,
