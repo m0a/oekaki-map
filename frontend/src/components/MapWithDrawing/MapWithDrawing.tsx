@@ -347,11 +347,11 @@ export function MapWithDrawing({
     // Sync canvas transform with map during drag (for smooth tile following)
     map.on('move', () => {
       if (!canvasRef.current) return;
-      // Leaflet applies transform to mapPane during panning
+      // Use L.DomUtil.getPosition to get the accurate pane position
       const mapPane = map.getPane('mapPane');
       if (mapPane) {
-        // Copy the mapPane's transform to the canvas for real-time sync
-        canvasRef.current.style.transform = mapPane.style.transform;
+        const pos = L.DomUtil.getPosition(mapPane);
+        canvasRef.current.style.transform = `translate3d(${pos.x}px, ${pos.y}px, 0)`;
       }
     });
 
@@ -372,9 +372,10 @@ export function MapWithDrawing({
 
       // Apply scale transform (combine with any existing translate from pan)
       const mapPane = map.getPane('mapPane');
-      if (mapPane && mapPane.style.transform) {
-        // If there's a translate transform, combine with scale
-        canvasRef.current.style.transform = `${mapPane.style.transform} scale(${scale})`;
+      if (mapPane) {
+        const pos = L.DomUtil.getPosition(mapPane);
+        // Combine translate with scale
+        canvasRef.current.style.transform = `translate3d(${pos.x}px, ${pos.y}px, 0) scale(${scale})`;
       } else {
         canvasRef.current.style.transform = `scale(${scale})`;
       }
