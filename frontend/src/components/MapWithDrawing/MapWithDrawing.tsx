@@ -236,15 +236,21 @@ export function MapWithDrawing({
     e.preventDefault();
     e.stopPropagation();
 
-    const point = screenToCanvas(e.clientX, e.clientY);
-    if (point && lastPointRef.current) {
-      drawLine(lastPointRef.current, point);
-      lastPointRef.current = point;
+    // Get coalesced events for smoother drawing on mobile devices
+    // Browsers may combine multiple touch events into one, causing gaps in the line
+    const coalescedEvents = e.nativeEvent.getCoalescedEvents?.() ?? [e.nativeEvent];
 
-      // Store geographic coordinates for undo/redo
-      const latLng = canvasToLatLng(point);
-      if (latLng) {
-        currentStrokePointsRef.current.push(latLng);
+    for (const event of coalescedEvents) {
+      const point = screenToCanvas(event.clientX, event.clientY);
+      if (point && lastPointRef.current) {
+        drawLine(lastPointRef.current, point);
+        lastPointRef.current = point;
+
+        // Store geographic coordinates for undo/redo
+        const latLng = canvasToLatLng(point);
+        if (latLng) {
+          currentStrokePointsRef.current.push(latLng);
+        }
       }
     }
   }, [drawingState.mode, screenToCanvas, canvasToLatLng, drawLine, isDrawableZoom]);
@@ -434,6 +440,9 @@ export function MapWithDrawing({
         canvasZoomRef.current
       );
 
+      // Disable image smoothing to prevent sub-pixel rendering artifacts at tile boundaries
+      ctx.imageSmoothingEnabled = false;
+
       for (const tile of cachedTiles) {
         const scale = Math.pow(2, tile.z - canvasZoomRef.current);
         const tileBounds = getTileBounds(tile.x, tile.y, tile.z);
@@ -445,15 +454,20 @@ export function MapWithDrawing({
         const offsetY = tileCenterPoint.y - originPoint.y;
 
         const destTileSize = TILE_DIMENSION / scale;
-        const destX = canvasCenterX + offsetX - destTileSize / 2;
-        const destY = canvasCenterY + offsetY - destTileSize / 2;
+        // Round coordinates to integers to prevent sub-pixel gaps between tiles
+        const destX = Math.round(canvasCenterX + offsetX - destTileSize / 2);
+        const destY = Math.round(canvasCenterY + offsetY - destTileSize / 2);
+        const destSize = Math.round(destTileSize);
 
         ctx.drawImage(
           tile.image,
           0, 0, TILE_DIMENSION, TILE_DIMENSION,
-          destX, destY, destTileSize, destTileSize
+          destX, destY, destSize, destSize
         );
       }
+
+      // Re-enable image smoothing for stroke drawing
+      ctx.imageSmoothingEnabled = true;
     }
 
     // 3. Draw strokes on top
