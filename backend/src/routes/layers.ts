@@ -5,6 +5,7 @@ import type { Env } from '../types/index';
 import { MAX_LAYER_NAME_LENGTH } from '../types/index';
 import { createLayerService } from '../services/layers';
 import { createCanvasService } from '../services/canvas';
+import { isValidCanvasId, isValidLayerId } from '../utils/validation';
 
 // Validation schemas
 const createLayerSchema = z.object({
@@ -24,7 +25,7 @@ const layersRoutes = new Hono<{ Bindings: Env }>();
 layersRoutes.get('/:canvasId/layers', async (c) => {
   const canvasId = c.req.param('canvasId');
 
-  if (canvasId.length !== 21) {
+  if (!isValidCanvasId(canvasId)) {
     return c.json(
       { error: 'INVALID_ID', message: 'Invalid canvas ID format' },
       400
@@ -52,7 +53,7 @@ layersRoutes.post(
     const canvasId = c.req.param('canvasId');
     const data = c.req.valid('json');
 
-    if (canvasId.length !== 21) {
+    if (!isValidCanvasId(canvasId)) {
       return c.json(
         { error: 'INVALID_ID', message: 'Invalid canvas ID format' },
         400
@@ -99,7 +100,7 @@ layersRoutes.patch(
     const layerId = c.req.param('id');
     const data = c.req.valid('json');
 
-    if (canvasId.length !== 21 || layerId.length !== 21) {
+    if (!isValidCanvasId(canvasId) || !isValidLayerId(layerId)) {
       return c.json({ error: 'INVALID_ID', message: 'Invalid ID format' }, 400);
     }
 
@@ -137,7 +138,7 @@ layersRoutes.delete('/:canvasId/layers/:id', async (c) => {
   const canvasId = c.req.param('canvasId');
   const layerId = c.req.param('id');
 
-  if (canvasId.length !== 21 || layerId.length !== 21) {
+  if (!isValidCanvasId(canvasId) || !isValidLayerId(layerId)) {
     return c.json({ error: 'INVALID_ID', message: 'Invalid ID format' }, 400);
   }
 

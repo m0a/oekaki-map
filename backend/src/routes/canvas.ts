@@ -3,6 +3,7 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import type { Env } from '../types/index';
 import { createCanvasService } from '../services/canvas';
+import { isValidCanvasId } from '../utils/validation';
 
 // Validation schemas
 const createCanvasSchema = z.object({
@@ -19,8 +20,6 @@ const updateCanvasSchema = z.object({
   shareLng: z.number().min(-180).max(180).optional(),
   shareZoom: z.number().int().min(1).max(19).optional(),
 });
-
-// Canvas ID format: 21 characters (nanoid)
 
 // Canvas routes
 const canvasRoutes = new Hono<{ Bindings: Env }>();
@@ -50,7 +49,7 @@ canvasRoutes.post(
 canvasRoutes.get('/:id', async (c) => {
   const id = c.req.param('id');
 
-  if (id.length !== 21) {
+  if (!isValidCanvasId(id)) {
     return c.json(
       { error: 'INVALID_ID', message: 'Invalid canvas ID format' },
       400

@@ -3,6 +3,7 @@ import type { Env, OGPUploadResponse } from '../types/index';
 import { OGP_MAX_IMAGE_SIZE_BYTES, OGP_MAX_PLACE_NAME_LENGTH } from '../types/index';
 import { createOGPService } from '../services/ogp';
 import { createOGPStorageService } from '../services/ogp-storage';
+import { isValidCanvasId } from '../utils/validation';
 
 // OGP routes
 const ogpRoutes = new Hono<{ Bindings: Env }>();
@@ -11,7 +12,7 @@ const ogpRoutes = new Hono<{ Bindings: Env }>();
 ogpRoutes.post('/:canvasId', async (c) => {
   const canvasId = c.req.param('canvasId');
 
-  if (canvasId.length !== 21) {
+  if (!isValidCanvasId(canvasId)) {
     return c.json(
       { error: 'INVALID_ID', message: 'Invalid canvas ID format' },
       400
@@ -119,7 +120,7 @@ ogpRoutes.post('/:canvasId', async (c) => {
 ogpRoutes.get('/:canvasId', async (c) => {
   const canvasId = c.req.param('canvasId');
 
-  if (canvasId.length !== 21) {
+  if (!isValidCanvasId(canvasId)) {
     return c.json(
       { error: 'INVALID_ID', message: 'Invalid canvas ID format' },
       400
@@ -162,7 +163,7 @@ ogpRoutes.get('/image/:filename', async (c) => {
 
   const canvasId = match[1];
 
-  if (canvasId.length !== 21) {
+  if (!isValidCanvasId(canvasId)) {
     return c.json(
       { error: 'INVALID_ID', message: 'Invalid canvas ID format' },
       400
