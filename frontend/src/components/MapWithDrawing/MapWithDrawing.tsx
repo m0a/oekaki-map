@@ -344,44 +344,37 @@ export function MapWithDrawing({
     containerRef.current.appendChild(canvas);
     canvasRef.current = canvas;
 
-    // Sync canvas by copying transform from Leaflet's map pane
+    // Simple canvas transform sync
+    // The canvas content is drawn with canvasOriginRef at the canvas center.
+    // During pan/zoom, we calculate where that origin point should appear on screen
+    // and transform the canvas accordingly.
     const syncCanvasTransform = () => {
-      if (!canvasRef.current) return;
+      if (!canvasRef.current || !canvasOriginRef.current) return;
+      if (canvasZoomRef.current === null) return;
 
-      const mapPane = map.getPane('mapPane');
-      if (!mapPane) return;
+      const canvas = canvasRef.current;
+      const rect = canvas.getBoundingClientRect();
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
 
-      // Get the position using Leaflet's utility
-      const pos = L.DomUtil.getPosition(mapPane);
+      // Where should the canvas origin appear on screen now?
+      const originPos = map.latLngToContainerPoint(canvasOriginRef.current);
 
-      // Calculate our own scale based on zoom difference
-      const currentZoomLevel = map.getZoom();
-      const scale = canvasZoomRef.current !== null
-        ? Math.pow(2, currentZoomLevel - canvasZoomRef.current)
-        : 1;
+      // Translate to move canvas center to where origin should be
+      const dx = originPos.x - centerX;
+      const dy = originPos.y - centerY;
 
-      // Apply the same translate as mapPane, plus our scale
-      if (scale !== 1) {
-        // During zoom, apply both translate and scale
-        const canvasRect = canvasRef.current.getBoundingClientRect();
-        const centerX = canvasRect.width / 2;
-        const centerY = canvasRect.height / 2;
-        canvasRef.current.style.transformOrigin = `${centerX}px ${centerY}px`;
-        canvasRef.current.style.transform = `translate(${pos.x}px, ${pos.y}px) scale(${scale})`;
-      } else {
-        // During pan only, just translate
-        canvasRef.current.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
-      }
+      // Apply transform
+      canvas.style.transform = `translate(${dx}px, ${dy}px)`;
     };
 
-    // Update on zoom end
+    // Update zoom state on zoom end
     const handleZoomEnd = () => {
       setCurrentZoom(map.getZoom());
     };
 
-    // Listen to all relevant events
+    // Listen to move events for panning
     map.on('move', syncCanvasTransform);
-    map.on('zoom', syncCanvasTransform);
     map.on('zoomend', handleZoomEnd);
 
     // On map move end, update position (transform reset happens after redraw)
