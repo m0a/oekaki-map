@@ -344,12 +344,11 @@ export function MapWithDrawing({
     containerRef.current.appendChild(canvas);
     canvasRef.current = canvas;
 
-    // Sync canvas transform with map during drag (for smooth tile following)
-    map.on('move', () => {
-      if (!canvasRef.current || !canvasOriginRef.current) return;
+    // Unified transform sync function for both pan and zoom
+    const syncCanvasTransform = () => {
+      if (!canvasRef.current || !canvasOriginRef.current || !canvasZoomRef.current) return;
 
       // The origin point (canvasOriginRef) was drawn at the canvas center
-      // Get the canvas's CSS dimensions (not buffer dimensions)
       const canvasRect = canvasRef.current.getBoundingClientRect();
       const drawnAtX = canvasRect.width / 2;
       const drawnAtY = canvasRect.height / 2;
@@ -358,40 +357,23 @@ export function MapWithDrawing({
       const currentPos = map.latLngToContainerPoint(canvasOriginRef.current);
 
       // Calculate the offset needed to move the canvas content
-      // so that the origin appears at its current screen position
       const dx = currentPos.x - drawnAtX;
       const dy = currentPos.y - drawnAtY;
 
-      canvasRef.current.style.transform = `translate(${dx}px, ${dy}px)`;
-    });
-
-    // Sync canvas scale with map during zoom (for smooth tile scaling)
-    map.on('zoom', () => {
-      if (!canvasRef.current || !canvasZoomRef.current || !canvasOriginRef.current) return;
-
-      // Calculate scale factor between current zoom and canvas origin zoom
+      // Calculate scale factor (1.0 if same zoom level)
       const currentZoomLevel = map.getZoom();
       const scale = Math.pow(2, currentZoomLevel - canvasZoomRef.current);
 
-      // The origin point was drawn at the canvas center
-      const canvasRect = canvasRef.current.getBoundingClientRect();
-      const drawnAtX = canvasRect.width / 2;
-      const drawnAtY = canvasRect.height / 2;
-
-      // Where is the origin point NOW in container coordinates?
-      const currentPos = map.latLngToContainerPoint(canvasOriginRef.current);
-
-      // Calculate the translate offset
-      const dx = currentPos.x - drawnAtX;
-      const dy = currentPos.y - drawnAtY;
-
-      // Set transform-origin to where the origin was drawn (canvas center)
-      // This ensures scaling happens around the correct point
+      // Set transform-origin to canvas center for proper scaling
       canvasRef.current.style.transformOrigin = `${drawnAtX}px ${drawnAtY}px`;
 
-      // Combine translate and scale
+      // Apply both translate and scale (scale is 1.0 during pure pan)
       canvasRef.current.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
-    });
+    };
+
+    // Sync canvas transform during both pan and zoom
+    map.on('move', syncCanvasTransform);
+    map.on('zoom', syncCanvasTransform);
 
     // Update zoom state on zoom end (transform reset happens after redraw in moveend handler)
     map.on('zoomend', () => {
