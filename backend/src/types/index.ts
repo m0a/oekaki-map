@@ -78,7 +78,7 @@ export interface CreateCanvasResponse {
 
 export interface GetCanvasResponse {
   canvas: Canvas;
-  tiles: TileCoordinate[];
+  tiles: TileCoordinateWithVersion[];
 }
 
 export interface GetTilesResponse {

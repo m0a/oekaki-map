@@ -59,7 +59,7 @@ export interface CreateCanvasRequest {
 // API Response types
 export interface GetCanvasResponse {
   canvas: Canvas;
-  tiles: TileCoordinate[];
+  tiles: TileInfo[];
 }
 
 export interface SaveTilesResponse {
