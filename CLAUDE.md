@@ -1,44 +1,99 @@
-# oekaki-map Development Guidelines
+# CLAUDE.md
 
-Auto-generated from all feature plans. Last updated: 2026-01-02
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Active Technologies
-- TypeScript 5.x (strict mode) + GitHub Actions, Cloudflare Wrangler CLI, pnpm (001-ci-auto-deploy)
-- Cloudflare D1 (SQLite-compatible), Cloudflare R2 (001-ci-auto-deploy)
-- TypeScript 5.x (strict mode) + React 18+, Leaflet (002-undo-redo)
-- クライアントサイドメモリ（セッション内のみ）、サーバー同期は既存のタイル保存機能を利用 (002-undo-redo)
-- TypeScript 5.x (strict mode) + React 18.3.1, Leaflet 1.9.4, Hono 4.6.0, Vite 6.0 (003-layer-structure)
-- Cloudflare D1 (SQLite) + Cloudflare R2 (WebP tiles) (003-layer-structure)
-- TypeScript 5.6 (strict mode) + React 18.3.1, Leaflet 1.9.4, Hono 4.6.0, Vite 6.0 (004-url-share)
-- TypeScript 5.6 (strict mode) + React 18.3.1, Leaflet 1.9.4, Vite 6.0 (005-compact-toolbar)
-- N/A（UIのみの変更） (005-compact-toolbar)
-- TypeScript 5.6 (strict mode) + React 18.3.1, Hono 4.6.0, Leaflet 1.9.4, html2canvas（画像生成用） (006-ogp-share-preview)
-- Cloudflare D1 (SQLite) + Cloudflare R2 (WebP/PNG画像) (006-ogp-share-preview)
-- TypeScript 5.6 (strict mode) + React 18.3.1, Leaflet 1.9.4, Vite 6.0, Hono 4.6.0 (008-tile-map-sync)
-- Cloudflare D1 (タイルメタデータ) + Cloudflare R2 (WebP画像) (008-tile-map-sync)
+## Project Overview
 
-- TypeScript 5.x (strict mode) + React 18+, Vite, Hono, Leaflet, Hono RPC (001-map-drawing-share)
+oekaki-map is a web application for drawing on OpenStreetMap and sharing via URL. Users can draw freehand on a map, and the drawings are saved as 256x256px WebP tiles stored in Cloudflare R2.
 
-## Project Structure
-
-```text
-src/
-tests/
-```
+**Production URL**: https://oekaki-map.abe00makoto.workers.dev
 
 ## Commands
 
-npm test && npm run lint
+### Development
+```bash
+# Start both frontend and backend (recommended)
+pnpm dev
 
-## Code Style
+# Or start separately
+cd frontend && pnpm dev      # Vite dev server (port 5173)
+cd backend && pnpm dev       # Wrangler local dev (port 8787)
+```
 
-TypeScript 5.x (strict mode): Follow standard conventions
+### Testing
+```bash
+# Unit tests
+cd frontend && pnpm test     # Vitest with React Testing Library
+cd backend && pnpm test      # Vitest
 
-## Recent Changes
-- 008-tile-map-sync: Added TypeScript 5.6 (strict mode) + React 18.3.1, Leaflet 1.9.4, Vite 6.0, Hono 4.6.0
-- 006-ogp-share-preview: Added TypeScript 5.6 (strict mode) + React 18.3.1, Hono 4.6.0, Leaflet 1.9.4, html2canvas（画像生成用）
-- 005-compact-toolbar: Added TypeScript 5.6 (strict mode) + React 18.3.1, Leaflet 1.9.4, Vite 6.0
+# Single test file
+cd frontend && pnpm test src/hooks/useUndoRedo.test.ts
 
+# E2E tests
+pnpm test:e2e                # Playwright
+```
 
-<!-- MANUAL ADDITIONS START -->
-<!-- MANUAL ADDITIONS END -->
+### Lint & Type Check
+```bash
+pnpm lint                    # ESLint (root config covers both)
+pnpm type-check              # TypeScript strict mode
+```
+
+### Database (D1)
+```bash
+cd backend
+pnpm exec wrangler d1 migrations apply DB --local     # Local
+pnpm exec wrangler d1 migrations apply DB --remote    # Production
+pnpm exec wrangler d1 migrations list DB --local      # Check status
+```
+
+### Release
+```bash
+/release                     # Claude Code command - auto-increments patch version
+```
+
+## Architecture
+
+### Data Flow
+1. User draws on HTML5 Canvas overlay (positioned over Leaflet map)
+2. On stroke end, canvas is split into 256x256 tiles at current zoom level
+3. Tiles are converted to WebP and uploaded to R2 via `/api/canvas/:id/tiles`
+4. Tile metadata stored in D1, images in R2 with key format: `tiles/{canvasId}/{z}/{x}/{y}.webp`
+5. On load, tiles for visible area are fetched and composited onto canvas
+
+### Key Architectural Decisions
+- **Tile-based storage**: Drawings stored as map tiles (same z/x/y system as map tiles) for efficient loading at any zoom
+- **Canvas origin tracking**: `canvasOriginRef` tracks which LatLng is at canvas center for coordinate conversion
+- **Stroke-based undo**: Each stroke is tracked with `StrokeData` (points, color, width, layerId) for undo/redo
+- **OGP for crawlers**: Server detects crawlers via User-Agent and returns HTML with OGP meta tags instead of SPA
+
+### Frontend Structure
+- `App.tsx` - Main orchestrator, manages state via custom hooks
+- `MapWithDrawing.tsx` - Leaflet map + Canvas overlay, handles draw/navigate modes
+- Custom hooks pattern: `useCanvas`, `useDrawing`, `useLayers`, `useUndoRedo`, `useAutoSave`
+
+### Backend Structure
+- `index.ts` - Hono router, serves SPA and handles OGP for crawlers
+- Routes: `/api/canvas`, `/api/tiles`, `/api/layers`, `/api/ogp`
+- Services: `canvas.ts`, `tiles.ts`, `layers.ts` (D1 operations), `storage.ts`, `ogp-storage.ts` (R2 operations)
+
+### Type Sharing
+Backend exports types from `backend/src/types/index.ts`. Frontend imports the same type definitions locally. Key types:
+- `Canvas` - Drawing surface with position, zoom, OGP metadata
+- `Layer` - Drawing layer (max 10 per canvas)
+- `TileCoordinate` - z/x/y tile position
+- `StrokeData` - Frontend-only, for undo/redo
+
+## CI/CD
+
+| Event | Environment | URL Pattern |
+|-------|-------------|-------------|
+| PR | Preview | `oekaki-map-pr-{N}.abe00makoto.workers.dev` |
+| main push | Main Preview | `oekaki-map-main-preview.abe00makoto.workers.dev` |
+| Tag (v*) | Production | `oekaki-map.abe00makoto.workers.dev` |
+
+D1 migrations run automatically before each deployment.
+
+## Specs
+
+Feature specifications are in `specs/` directory. Each feature has `spec.md`, `plan.md`, and optionally `tasks.md`.
