@@ -344,13 +344,8 @@ export function MapWithDrawing({
     containerRef.current.appendChild(canvas);
     canvasRef.current = canvas;
 
-    // Track zoom animation state
-    let isZooming = false;
-    let zoomStartTranslate = { x: 0, y: 0 };
-
     // Sync canvas transform during pan
     const syncCanvasPan = () => {
-      if (isZooming) return; // Don't interfere during zoom
       if (!canvasRef.current || !canvasOriginRef.current) return;
       if (canvasZoomRef.current === null) return;
 
@@ -366,55 +361,26 @@ export function MapWithDrawing({
       const dx = originPos.x - centerX;
       const dy = originPos.y - centerY;
 
-      // Apply transform (no scale during pan)
+      // Apply transform
       canvas.style.transform = `translate(${dx}px, ${dy}px)`;
     };
 
-    // Handle zoom start
+    // Hide canvas during zoom (zoom animation is too complex to sync properly)
     const handleZoomStart = () => {
-      if (!canvasRef.current || !canvasOriginRef.current) return;
-      if (canvasZoomRef.current === null) return;
-
-      isZooming = true;
-
-      const rect = canvasRef.current.getBoundingClientRect();
-      const centerX = rect.width / 2;
-      const centerY = rect.height / 2;
-      const originPos = map.latLngToContainerPoint(canvasOriginRef.current);
-
-      zoomStartTranslate = {
-        x: originPos.x - centerX,
-        y: originPos.y - centerY
-      };
+      if (canvasRef.current) {
+        canvasRef.current.style.opacity = '0';
+      }
     };
 
-    // Handle zoom animation using zoomanim event
-    const handleZoomAnim = (e: L.ZoomAnimEvent) => {
-      if (!canvasRef.current || canvasZoomRef.current === null) return;
-
-      const canvas = canvasRef.current;
-      const rect = canvas.getBoundingClientRect();
-      const centerX = rect.width / 2;
-      const centerY = rect.height / 2;
-
-      // e.zoom is the TARGET zoom level
-      const scale = Math.pow(2, e.zoom - canvasZoomRef.current);
-
-      // Apply scale around canvas center, keep translate from zoom start
-      canvas.style.transformOrigin = `${centerX}px ${centerY}px`;
-      canvas.style.transform = `translate(${zoomStartTranslate.x}px, ${zoomStartTranslate.y}px) scale(${scale})`;
-    };
-
-    // Update zoom state on zoom end
+    // Show canvas after zoom ends (will be redrawn by moveend handler)
     const handleZoomEnd = () => {
-      isZooming = false;
       setCurrentZoom(map.getZoom());
+      // Canvas will be shown after redraw in moveend handler
     };
 
     // Listen to events
     map.on('move', syncCanvasPan);
     map.on('zoomstart', handleZoomStart);
-    map.on('zoomanim', handleZoomAnim);
     map.on('zoomend', handleZoomEnd);
 
     // On map move end, update position (transform reset happens after redraw)
@@ -656,10 +622,11 @@ export function MapWithDrawing({
         if (strokes !== undefined) {
           redrawStrokes(strokes, visibleLayerIds);
         }
-        // Reset transform AFTER redraw to avoid flicker
+        // Reset transform and show canvas AFTER redraw
         if (canvasRef.current) {
           canvasRef.current.style.transform = '';
           canvasRef.current.style.transformOrigin = '';
+          canvasRef.current.style.opacity = '1'; // Show canvas after redraw
         }
       })();
     };
