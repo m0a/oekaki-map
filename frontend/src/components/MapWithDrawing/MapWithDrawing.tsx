@@ -347,10 +347,11 @@ export function MapWithDrawing({
     // Sync canvas transform with map during drag (for smooth tile following)
     map.on('move', () => {
       if (!canvasRef.current) return;
-      const tilePane = map.getPane('tilePane');
-      if (tilePane) {
-        // Copy the tilePane's transform to the canvas for real-time sync
-        canvasRef.current.style.transform = tilePane.style.transform;
+      // Leaflet applies transform to mapPane during panning
+      const mapPane = map.getPane('mapPane');
+      if (mapPane) {
+        // Copy the mapPane's transform to the canvas for real-time sync
+        canvasRef.current.style.transform = mapPane.style.transform;
       }
     });
 
@@ -370,10 +371,10 @@ export function MapWithDrawing({
       canvasRef.current.style.transformOrigin = `${containerPoint.x}px ${containerPoint.y}px`;
 
       // Apply scale transform (combine with any existing translate from pan)
-      const tilePane = map.getPane('tilePane');
-      if (tilePane && tilePane.style.transform) {
+      const mapPane = map.getPane('mapPane');
+      if (mapPane && mapPane.style.transform) {
         // If there's a translate transform, combine with scale
-        canvasRef.current.style.transform = `${tilePane.style.transform} scale(${scale})`;
+        canvasRef.current.style.transform = `${mapPane.style.transform} scale(${scale})`;
       } else {
         canvasRef.current.style.transform = `scale(${scale})`;
       }
