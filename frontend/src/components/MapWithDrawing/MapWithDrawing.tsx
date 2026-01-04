@@ -346,29 +346,31 @@ export function MapWithDrawing({
 
     // Unified transform sync function for both pan and zoom
     const syncCanvasTransform = () => {
-      if (!canvasRef.current || !canvasOriginRef.current || !canvasZoomRef.current) return;
+      if (!canvasRef.current || !canvasOriginRef.current) return;
+      // Note: canvasZoomRef.current can be 0, so check !== null instead
+      if (canvasZoomRef.current === null) return;
 
-      // The origin point (canvasOriginRef) was drawn at the canvas center
-      const canvasRect = canvasRef.current.getBoundingClientRect();
-      const drawnAtX = canvasRect.width / 2;
-      const drawnAtY = canvasRect.height / 2;
+      const canvas = canvasRef.current;
+      const canvasRect = canvas.getBoundingClientRect();
+      const centerX = canvasRect.width / 2;
+      const centerY = canvasRect.height / 2;
 
-      // Where is the origin point NOW in container coordinates?
-      const currentPos = map.latLngToContainerPoint(canvasOriginRef.current);
-
-      // Calculate the offset needed to move the canvas content
-      const dx = currentPos.x - drawnAtX;
-      const dy = currentPos.y - drawnAtY;
-
-      // Calculate scale factor (1.0 if same zoom level)
+      // Calculate scale factor
       const currentZoomLevel = map.getZoom();
       const scale = Math.pow(2, currentZoomLevel - canvasZoomRef.current);
 
-      // Set transform-origin to canvas center for proper scaling
-      canvasRef.current.style.transformOrigin = `${drawnAtX}px ${drawnAtY}px`;
+      // Where is the canvas origin (the point drawn at canvas center) NOW on screen?
+      const originPos = map.latLngToContainerPoint(canvasOriginRef.current);
 
-      // Apply both translate and scale (scale is 1.0 during pure pan)
-      canvasRef.current.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
+      // The content was drawn with canvasOriginRef at (centerX, centerY).
+      // After scaling around (centerX, centerY), canvasOriginRef is still at (centerX, centerY).
+      // We need to translate so it appears at originPos.
+      const dx = originPos.x - centerX;
+      const dy = originPos.y - centerY;
+
+      // Use transform-origin at canvas center (where content was drawn centered)
+      canvas.style.transformOrigin = `${centerX}px ${centerY}px`;
+      canvas.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
     };
 
     // Sync canvas transform during both pan and zoom
