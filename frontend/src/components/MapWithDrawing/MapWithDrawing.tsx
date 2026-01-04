@@ -347,11 +347,10 @@ export function MapWithDrawing({
     // Sync canvas transform with map during drag (for smooth tile following)
     map.on('move', () => {
       if (!canvasRef.current) return;
-      // Use L.DomUtil.getPosition to get the accurate pane position
       const mapPane = map.getPane('mapPane');
-      if (mapPane) {
-        const pos = L.DomUtil.getPosition(mapPane);
-        canvasRef.current.style.transform = `translate3d(${pos.x}px, ${pos.y}px, 0)`;
+      if (mapPane && mapPane.style.transform) {
+        // Copy the exact transform from mapPane to follow the map pan
+        canvasRef.current.style.transform = mapPane.style.transform;
       }
     });
 
@@ -370,12 +369,18 @@ export function MapWithDrawing({
       // Set transform-origin to zoom center
       canvasRef.current.style.transformOrigin = `${containerPoint.x}px ${containerPoint.y}px`;
 
-      // Apply scale transform (combine with any existing translate from pan)
+      // Apply scale transform (combine with mapPane's translate from pan)
       const mapPane = map.getPane('mapPane');
-      if (mapPane) {
-        const pos = L.DomUtil.getPosition(mapPane);
-        // Combine translate with scale
-        canvasRef.current.style.transform = `translate3d(${pos.x}px, ${pos.y}px, 0) scale(${scale})`;
+      if (mapPane && mapPane.style.transform) {
+        // Parse the translate values from mapPane's transform
+        const match = mapPane.style.transform.match(/translate3d\(([^,]+),\s*([^,]+),/);
+        if (match) {
+          const tx = match[1];
+          const ty = match[2];
+          canvasRef.current.style.transform = `translate3d(${tx}, ${ty}, 0) scale(${scale})`;
+        } else {
+          canvasRef.current.style.transform = `scale(${scale})`;
+        }
       } else {
         canvasRef.current.style.transform = `scale(${scale})`;
       }
