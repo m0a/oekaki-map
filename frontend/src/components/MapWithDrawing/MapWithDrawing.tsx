@@ -346,44 +346,51 @@ export function MapWithDrawing({
 
     // Sync canvas transform with map during drag (for smooth tile following)
     map.on('move', () => {
-      if (!canvasRef.current) return;
-      const mapPane = map.getPane('mapPane');
-      if (mapPane && mapPane.style.transform) {
-        // Copy the exact transform from mapPane to follow the map pan
-        canvasRef.current.style.transform = mapPane.style.transform;
-      }
+      if (!canvasRef.current || !canvasOriginRef.current) return;
+
+      // The origin point (canvasOriginRef) was drawn at the canvas center
+      // Get the canvas's CSS dimensions (not buffer dimensions)
+      const canvasRect = canvasRef.current.getBoundingClientRect();
+      const drawnAtX = canvasRect.width / 2;
+      const drawnAtY = canvasRect.height / 2;
+
+      // Where is the origin point NOW in container coordinates?
+      const currentPos = map.latLngToContainerPoint(canvasOriginRef.current);
+
+      // Calculate the offset needed to move the canvas content
+      // so that the origin appears at its current screen position
+      const dx = currentPos.x - drawnAtX;
+      const dy = currentPos.y - drawnAtY;
+
+      canvasRef.current.style.transform = `translate(${dx}px, ${dy}px)`;
     });
 
     // Sync canvas scale with map during zoom (for smooth tile scaling)
     map.on('zoom', () => {
-      if (!canvasRef.current || !canvasZoomRef.current) return;
+      if (!canvasRef.current || !canvasZoomRef.current || !canvasOriginRef.current) return;
 
       // Calculate scale factor between current zoom and canvas origin zoom
       const currentZoomLevel = map.getZoom();
       const scale = Math.pow(2, currentZoomLevel - canvasZoomRef.current);
 
-      // Get the zoom center point for transform-origin
-      const center = map.getCenter();
-      const containerPoint = map.latLngToContainerPoint(center);
+      // The origin point was drawn at the canvas center
+      const canvasRect = canvasRef.current.getBoundingClientRect();
+      const drawnAtX = canvasRect.width / 2;
+      const drawnAtY = canvasRect.height / 2;
 
-      // Set transform-origin to zoom center
-      canvasRef.current.style.transformOrigin = `${containerPoint.x}px ${containerPoint.y}px`;
+      // Where is the origin point NOW in container coordinates?
+      const currentPos = map.latLngToContainerPoint(canvasOriginRef.current);
 
-      // Apply scale transform (combine with mapPane's translate from pan)
-      const mapPane = map.getPane('mapPane');
-      if (mapPane && mapPane.style.transform) {
-        // Parse the translate values from mapPane's transform
-        const match = mapPane.style.transform.match(/translate3d\(([^,]+),\s*([^,]+),/);
-        if (match) {
-          const tx = match[1];
-          const ty = match[2];
-          canvasRef.current.style.transform = `translate3d(${tx}, ${ty}, 0) scale(${scale})`;
-        } else {
-          canvasRef.current.style.transform = `scale(${scale})`;
-        }
-      } else {
-        canvasRef.current.style.transform = `scale(${scale})`;
-      }
+      // Calculate the translate offset
+      const dx = currentPos.x - drawnAtX;
+      const dy = currentPos.y - drawnAtY;
+
+      // Set transform-origin to where the origin was drawn (canvas center)
+      // This ensures scaling happens around the correct point
+      canvasRef.current.style.transformOrigin = `${drawnAtX}px ${drawnAtY}px`;
+
+      // Combine translate and scale
+      canvasRef.current.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
     });
 
     // Update zoom state and reset transform on zoom end
