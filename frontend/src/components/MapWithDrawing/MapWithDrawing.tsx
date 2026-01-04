@@ -54,6 +54,7 @@ export function MapWithDrawing({
 
   // Current zoom level state
   const [currentZoom, setCurrentZoom] = useState(position.zoom);
+  const [isMapReady, setIsMapReady] = useState(false);
   const isDrawableZoom = currentZoom >= MIN_DRAWABLE_ZOOM && currentZoom <= MAX_DRAWABLE_ZOOM;
 
   // Drawing state
@@ -361,6 +362,9 @@ export function MapWithDrawing({
     };
     window.addEventListener('resize', handleResize);
 
+    // Mark map as ready for tile loading
+    setIsMapReady(true);
+
     return () => {
       window.removeEventListener('resize', handleResize);
       if (canvasRef.current && canvasRef.current.parentNode) {
@@ -510,7 +514,7 @@ export function MapWithDrawing({
 
   // Load initial tiles when tiles and canvasId are provided (uses tile cache)
   useEffect(() => {
-    if (!tiles || tiles.length === 0 || !canvasId || !canvasRef.current || !canvasOriginRef.current) return;
+    if (!isMapReady || !tiles || tiles.length === 0 || !canvasId || !canvasRef.current || !canvasOriginRef.current) return;
 
     const loadInitialTiles = async () => {
       // Convert tiles to TileInfo format with updatedAt
@@ -531,7 +535,7 @@ export function MapWithDrawing({
     };
 
     void loadInitialTiles();
-  }, [tiles, canvasId, loadTiles, redrawAll, strokes, visibleLayerIds]);
+  }, [isMapReady, tiles, canvasId, loadTiles, redrawAll, strokes, visibleLayerIds]);
 
   // Redraw strokes from history (for undo/redo) - now uses redrawAll
   const redrawStrokes = useCallback((strokesData: StrokeData[], visibleLayers?: string[]) => {
