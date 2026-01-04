@@ -1,6 +1,7 @@
 import type {
   DrawingTile,
   TileCoordinate,
+  TileCoordinateWithVersion,
   Env,
 } from '../types/index';
 import { StorageService } from './storage';
@@ -174,17 +175,17 @@ export class TileService {
     minY: number,
     maxY: number,
     layerId?: string
-  ): Promise<TileCoordinate[]> {
+  ): Promise<TileCoordinateWithVersion[]> {
     let query: string;
     let params: (string | number)[];
 
     if (layerId) {
-      query = `SELECT z, x, y FROM drawing_tile
+      query = `SELECT z, x, y, updated_at FROM drawing_tile
                WHERE canvas_id = ? AND z = ? AND x >= ? AND x <= ? AND y >= ? AND y <= ?
                AND (layer_id = ? OR layer_id IS NULL)`;
       params = [canvasId, z, minX, maxX, minY, maxY, layerId];
     } else {
-      query = `SELECT z, x, y FROM drawing_tile
+      query = `SELECT z, x, y, updated_at FROM drawing_tile
                WHERE canvas_id = ? AND z = ? AND x >= ? AND x <= ? AND y >= ? AND y <= ?`;
       params = [canvasId, z, minX, maxX, minY, maxY];
     }
@@ -192,12 +193,13 @@ export class TileService {
     const results = await this.db
       .prepare(query)
       .bind(...params)
-      .all<{ z: number; x: number; y: number }>();
+      .all<{ z: number; x: number; y: number; updated_at: string }>();
 
     return results.results.map((row) => ({
       z: row.z,
       x: row.x,
       y: row.y,
+      updatedAt: row.updated_at,
     }));
   }
 

@@ -1,15 +1,11 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import type { MapPosition, DrawingState, StrokeData } from '../../types';
-import { loadTilesToCanvas } from '../../utils/tiles';
+import type { MapPosition, DrawingState, StrokeData, TileInfo } from '../../types';
+import { getTileBounds, projectToPixel } from '../../utils/tiles';
 import { api } from '../../services/api';
-
-interface TileInfo {
-  z: number;
-  x: number;
-  y: number;
-}
+import { useTileCache } from '../../hooks/useTileCache';
+import { TILE_DIMENSION } from '../../types';
 
 interface MapWithDrawingProps {
   position?: MapPosition;
@@ -52,6 +48,9 @@ export function MapWithDrawing({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Tile cache hook
+  const { loadTiles, getCachedTiles, clearCache } = useTileCache();
 
   // Current zoom level state
   const [currentZoom, setCurrentZoom] = useState(position.zoom);
@@ -121,7 +120,7 @@ export function MapWithDrawing({
     ctx.stroke();
   }, [getContext, drawingState.color, drawingState.thickness, drawingState.mode]);
 
-  // Clear canvas and reload tiles for current view
+  // Clear canvas and reload tiles for current view (uses tile cache)
   const reloadTilesForCurrentView = useCallback(async () => {
     if (!canvasRef.current || !mapRef.current || !canvasId) return;
 
@@ -141,16 +140,16 @@ export function MapWithDrawing({
     canvasOriginRef.current = center;
     canvasZoomRef.current = zoom;
 
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Clear cache for this canvas before reloading (to get fresh tiles after save)
+    clearCache(canvasId);
 
     // Get visible bounds
     const bounds = map.getBounds();
     const nw = bounds.getNorthWest();
     const se = bounds.getSouthEast();
 
-    // Fetch tiles for all drawable zoom levels (16-19) to handle zoom changes
-    const allTileImages: Array<{ z: number; x: number; y: number; image: HTMLImageElement }> = [];
+    // Collect all tiles to load
+    const tilesToLoad: TileInfo[] = [];
 
     try {
       for (let tileZoom = MIN_DRAWABLE_ZOOM; tileZoom <= MAX_DRAWABLE_ZOOM; tileZoom++) {
@@ -166,35 +165,31 @@ export function MapWithDrawing({
         const response = await api.tiles.getForArea(canvasId, tileZoom, minX, maxX, minY, maxY);
 
         if (response.tiles && response.tiles.length > 0) {
-          // Load tile images
+          // Add tiles to load list with updatedAt for cache versioning
           for (const tile of response.tiles) {
-            // Add cache buster to ensure we get the latest version
-            const imageUrl = api.tiles.getImageUrl(canvasId, tile.z, tile.x, tile.y) + `?t=${Date.now()}`;
-            try {
-              const image = new Image();
-              image.crossOrigin = 'anonymous';
-              await new Promise<void>((resolve, reject) => {
-                image.onload = () => resolve();
-                image.onerror = () => reject(new Error(`Failed to load tile`));
-                image.src = imageUrl;
-              });
-              allTileImages.push({ ...tile, image });
-            } catch {
-              // Skip failed tiles
+            const tileInfo: TileInfo = { z: tile.z, x: tile.x, y: tile.y };
+            const updatedAt = (tile as TileInfo).updatedAt;
+            if (updatedAt) {
+              tileInfo.updatedAt = updatedAt;
             }
+            tilesToLoad.push(tileInfo);
           }
         }
       }
 
-      if (allTileImages.length > 0 && canvasOriginRef.current) {
-        // Use current zoom for tile loading - loadTilesToCanvas handles scaling
-        const roundedZoom = Math.round(zoom);
-        loadTilesToCanvas(canvas, canvasOriginRef.current, roundedZoom, allTileImages);
+      // Load tiles using cache (with cache buster for fresh data after save)
+      if (tilesToLoad.length > 0) {
+        // Add cache buster timestamp for fresh data
+        const tilesWithCacheBuster = tilesToLoad.map(t => ({
+          ...t,
+          updatedAt: t.updatedAt || String(Date.now()),
+        }));
+        await loadTiles(canvasId, tilesWithCacheBuster);
       }
     } catch (err) {
       console.error('Failed to reload tiles:', err);
     }
-  }, [canvasId, onFlushSave]);
+  }, [canvasId, onFlushSave, clearCache, loadTiles]);
 
   // Handle pointer down
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
@@ -413,108 +408,135 @@ export function MapWithDrawing({
     }
   }, [position.lat, position.lng, position.zoom]);
 
-  // Load initial tiles when tiles and canvasId are provided
-  useEffect(() => {
-    if (!tiles || tiles.length === 0 || !canvasId || !canvasRef.current || !canvasOriginRef.current) return;
-
-    const loadInitialTiles = async () => {
-      const tileImages: Array<{ z: number; x: number; y: number; image: HTMLImageElement }> = [];
-
-      for (const tile of tiles) {
-        const imageUrl = api.tiles.getImageUrl(canvasId, tile.z, tile.x, tile.y);
-        try {
-          const image = new Image();
-          image.crossOrigin = 'anonymous';
-          await new Promise<void>((resolve, reject) => {
-            image.onload = () => resolve();
-            image.onerror = () => reject(new Error(`Failed to load tile ${tile.z}/${tile.x}/${tile.y}`));
-            image.src = imageUrl;
-          });
-          tileImages.push({ ...tile, image });
-        } catch (err) {
-          console.error('Failed to load tile:', err);
-        }
-      }
-
-      if (tileImages.length > 0 && canvasRef.current && canvasOriginRef.current) {
-        // Use rounded zoom for tile loading (tiles are stored at integer zoom levels)
-        const roundedZoom = Math.round(canvasZoomRef.current);
-        loadTilesToCanvas(canvasRef.current, canvasOriginRef.current, roundedZoom, tileImages);
-      }
-    };
-
-    void loadInitialTiles();
-  }, [tiles, canvasId]);
-
-  // Redraw strokes from history (for undo/redo)
-  const redrawStrokes = useCallback((strokesData: StrokeData[], visibleLayers?: string[]) => {
+  // Redraw all: tiles first, then strokes (ensures tiles are never lost)
+  const redrawAll = useCallback((strokesData?: StrokeData[], visibleLayers?: string[]) => {
     const ctx = getContext();
-    if (!ctx || !canvasRef.current || !mapRef.current) return;
+    if (!ctx || !canvasRef.current || !mapRef.current || !canvasId) return;
 
+    const canvas = canvasRef.current;
     const currentZoomLevel = mapRef.current.getZoom();
 
-    // Clear canvas
-    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    // 1. Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Redraw each stroke (filter by visible layers if provided)
-    for (const stroke of strokesData) {
-      if (stroke.points.length === 0) continue;
+    // 2. Draw cached tiles first
+    const cachedTiles = getCachedTiles(canvasId);
+    if (cachedTiles.length > 0 && canvasOriginRef.current) {
+      const canvasCenterX = canvas.width / 2;
+      const canvasCenterY = canvas.height / 2;
+      const originPoint = projectToPixel(
+        canvasOriginRef.current.lat,
+        canvasOriginRef.current.lng,
+        canvasZoomRef.current
+      );
 
-      // Skip strokes from hidden layers
-      if (visibleLayers && !visibleLayers.includes(stroke.layerId)) continue;
+      for (const tile of cachedTiles) {
+        const scale = Math.pow(2, tile.z - canvasZoomRef.current);
+        const tileBounds = getTileBounds(tile.x, tile.y, tile.z);
+        const tileCenterLat = (tileBounds.getNorth() + tileBounds.getSouth()) / 2;
+        const tileCenterLng = (tileBounds.getWest() + tileBounds.getEast()) / 2;
 
-      // Convert geographic coordinates to screen coordinates
-      const screenPoints: Array<{ x: number; y: number }> = [];
-      for (const latLng of stroke.points) {
-        const screenPoint = latLngToCanvas(latLng);
-        if (screenPoint) {
-          screenPoints.push(screenPoint);
-        }
+        const tileCenterPoint = projectToPixel(tileCenterLat, tileCenterLng, canvasZoomRef.current);
+        const offsetX = tileCenterPoint.x - originPoint.x;
+        const offsetY = tileCenterPoint.y - originPoint.y;
+
+        const destTileSize = TILE_DIMENSION / scale;
+        const destX = canvasCenterX + offsetX - destTileSize / 2;
+        const destY = canvasCenterY + offsetY - destTileSize / 2;
+
+        ctx.drawImage(
+          tile.image,
+          0, 0, TILE_DIMENSION, TILE_DIMENSION,
+          destX, destY, destTileSize, destTileSize
+        );
       }
+    }
 
-      if (screenPoints.length === 0) continue;
+    // 3. Draw strokes on top
+    if (strokesData) {
+      for (const stroke of strokesData) {
+        if (stroke.points.length === 0) continue;
+        if (visibleLayers && !visibleLayers.includes(stroke.layerId)) continue;
 
-      // Scale thickness based on zoom level difference
-      const zoomDiff = currentZoomLevel - stroke.zoom;
-      const scaledThickness = stroke.thickness * Math.pow(2, zoomDiff);
-
-      ctx.beginPath();
-      ctx.strokeStyle = stroke.mode === 'erase' ? 'rgba(0,0,0,1)' : stroke.color;
-      ctx.lineWidth = scaledThickness;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-
-      if (stroke.mode === 'erase') {
-        ctx.globalCompositeOperation = 'destination-out';
-      } else {
-        ctx.globalCompositeOperation = 'source-over';
-      }
-
-      const firstPoint = screenPoints[0];
-      if (!firstPoint) continue;
-
-      if (screenPoints.length === 1) {
-        // Single point - draw a dot
-        ctx.beginPath();
-        ctx.arc(firstPoint.x, firstPoint.y, scaledThickness / 2, 0, Math.PI * 2);
-        ctx.fillStyle = stroke.mode === 'erase' ? 'rgba(0,0,0,1)' : stroke.color;
-        ctx.fill();
-      } else {
-        // Multiple points - draw lines
-        ctx.moveTo(firstPoint.x, firstPoint.y);
-        for (let i = 1; i < screenPoints.length; i++) {
-          const point = screenPoints[i];
-          if (point) {
-            ctx.lineTo(point.x, point.y);
+        const screenPoints: Array<{ x: number; y: number }> = [];
+        for (const latLng of stroke.points) {
+          const screenPoint = latLngToCanvas(latLng);
+          if (screenPoint) {
+            screenPoints.push(screenPoint);
           }
         }
-        ctx.stroke();
+
+        if (screenPoints.length === 0) continue;
+
+        const zoomDiff = currentZoomLevel - stroke.zoom;
+        const scaledThickness = stroke.thickness * Math.pow(2, zoomDiff);
+
+        ctx.beginPath();
+        ctx.strokeStyle = stroke.mode === 'erase' ? 'rgba(0,0,0,1)' : stroke.color;
+        ctx.lineWidth = scaledThickness;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        if (stroke.mode === 'erase') {
+          ctx.globalCompositeOperation = 'destination-out';
+        } else {
+          ctx.globalCompositeOperation = 'source-over';
+        }
+
+        const firstPoint = screenPoints[0];
+        if (!firstPoint) continue;
+
+        if (screenPoints.length === 1) {
+          ctx.beginPath();
+          ctx.arc(firstPoint.x, firstPoint.y, scaledThickness / 2, 0, Math.PI * 2);
+          ctx.fillStyle = stroke.mode === 'erase' ? 'rgba(0,0,0,1)' : stroke.color;
+          ctx.fill();
+        } else {
+          ctx.moveTo(firstPoint.x, firstPoint.y);
+          for (let i = 1; i < screenPoints.length; i++) {
+            const point = screenPoints[i];
+            if (point) {
+              ctx.lineTo(point.x, point.y);
+            }
+          }
+          ctx.stroke();
+        }
       }
     }
 
     // Reset composite operation
     ctx.globalCompositeOperation = 'source-over';
-  }, [getContext, latLngToCanvas]);
+  }, [getContext, canvasId, getCachedTiles, latLngToCanvas]);
+
+  // Load initial tiles when tiles and canvasId are provided (uses tile cache)
+  useEffect(() => {
+    if (!tiles || tiles.length === 0 || !canvasId || !canvasRef.current || !canvasOriginRef.current) return;
+
+    const loadInitialTiles = async () => {
+      // Convert tiles to TileInfo format with updatedAt
+      const tileInfos: TileInfo[] = tiles.map(tile => {
+        const tileInfo: TileInfo = { z: tile.z, x: tile.x, y: tile.y };
+        const updatedAt = tile.updatedAt;
+        if (updatedAt) {
+          tileInfo.updatedAt = updatedAt;
+        }
+        return tileInfo;
+      });
+
+      // Load tiles into cache
+      await loadTiles(canvasId, tileInfos);
+
+      // Redraw using cached tiles
+      redrawAll(strokes, visibleLayerIds);
+    };
+
+    void loadInitialTiles();
+  }, [tiles, canvasId, loadTiles, redrawAll, strokes, visibleLayerIds]);
+
+  // Redraw strokes from history (for undo/redo) - now uses redrawAll
+  const redrawStrokes = useCallback((strokesData: StrokeData[], visibleLayers?: string[]) => {
+    redrawAll(strokesData, visibleLayers);
+  }, [redrawAll]);
 
   // Redraw when strokes or visible layers change (undo/redo)
   useEffect(() => {

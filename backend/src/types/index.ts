@@ -34,6 +34,12 @@ export interface TileCoordinate {
   y: number;
 }
 
+// Tile coordinate with version info for HTTP caching
+export interface TileCoordinateWithVersion extends TileCoordinate {
+  /** Tile's last update timestamp (ISO8601) for cache versioning */
+  updatedAt: string;
+}
+
 // Map position
 export interface MapPosition {
   lat: number;

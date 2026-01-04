@@ -159,7 +159,7 @@ async function extractTileFromCanvas(
 }
 
 // Project lat/lng to pixel coordinates at given zoom (Web Mercator)
-function projectToPixel(lat: number, lng: number, zoom: number): { x: number; y: number } {
+export function projectToPixel(lat: number, lng: number, zoom: number): { x: number; y: number } {
   const scale = Math.pow(2, zoom) * 256;
   const x = ((lng + 180) / 360) * scale;
   const latRad = (lat * Math.PI) / 180;

@@ -179,8 +179,9 @@ tilesRoutes.get('/:canvasId/:z/:x/:filename', async (c) => {
     return new Response(imageData, {
       headers: {
         'Content-Type': 'image/webp',
-        // No cache during active editing, but allow CDN edge caching
-        'Cache-Control': 'public, max-age=0, must-revalidate',
+        // Long-term cache with version query param for cache busting
+        // ?v=updatedAt ensures fresh content after tile updates
+        'Cache-Control': 'public, max-age=31536000, immutable',
       },
     });
   } catch (error) {
