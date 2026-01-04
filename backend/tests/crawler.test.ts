@@ -2,9 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { isCrawler, getCrawlerName } from '../src/utils/crawler';
 
 describe('isCrawler', () => {
-  it('should detect LINE crawler', () => {
-    expect(isCrawler('Line/1.0')).toBe(true);
-    expect(isCrawler('Mozilla/5.0 Line/1.0')).toBe(true);
+  // LINE's OGP crawler uses facebookexternalhit, tested separately
+  // LINE in-app browser should NOT be detected as crawler
+  it('should not detect LINE in-app browser as crawler', () => {
+    // LINE in-app browser User-Agent contains "Line/" but is a real browser
+    expect(
+      isCrawler(
+        'Mozilla/5.0 (Linux; Android 10; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36 Line/14.0.0'
+      )
+    ).toBe(false);
   });
 
   it('should detect Twitterbot', () => {
@@ -53,8 +59,12 @@ describe('isCrawler', () => {
 describe('getCrawlerName', () => {
   it('should return crawler name for known crawlers', () => {
     expect(getCrawlerName('Twitterbot/1.0')).toBe('twitterbot');
-    expect(getCrawlerName('Line/1.0')).toBe('line');
     expect(getCrawlerName('facebookexternalhit/1.1')).toBe('facebookexternalhit');
+    expect(getCrawlerName('Slackbot-LinkExpanding 1.0')).toBe('slackbot');
+  });
+
+  it('should return null for LINE in-app browser', () => {
+    expect(getCrawlerName('Mozilla/5.0 Line/14.0.0')).toBe(null);
   });
 
   it('should return null for regular browsers', () => {

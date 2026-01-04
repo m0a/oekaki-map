@@ -1,3 +1,6 @@
+// Crawler patterns for SNS and search engine bots
+// Note: 'line' removed - too broad, matches LINE in-app browser
+// LINE's OGP crawler uses 'facebookexternalhit' which is already included
 const CRAWLER_PATTERNS = [
   'twitterbot',
   'facebookexternalhit',
@@ -5,7 +8,6 @@ const CRAWLER_PATTERNS = [
   'slackbot',
   'discordbot',
   'telegrambot',
-  'line',
   'googlebot',
   'bingbot',
   'applebot',
