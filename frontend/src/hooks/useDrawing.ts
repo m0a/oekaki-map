@@ -15,7 +15,7 @@ export function useDrawing(): UseDrawingReturn {
     isDrawing: false,
     color: DEFAULT_COLORS[0], // Black
     thickness: LINE_THICKNESSES.medium,
-    mode: 'draw',
+    mode: 'navigate',
   });
 
   const setColor = useCallback((color: string) => {
