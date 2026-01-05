@@ -68,6 +68,9 @@ export function MapWithDrawing({
   // Current stroke points for undo/redo (stored as geographic coordinates)
   const currentStrokePointsRef = useRef<Array<{ lat: number; lng: number }>>([]);
 
+  // RequestAnimationFrame ID for throttling pointer move events
+  const rafIdRef = useRef<number | null>(null);
+
   // Canvas origin (updated on map move)
   const canvasOriginRef = useRef<L.LatLng | null>(null);
   const canvasZoomRef = useRef<number>(18);
@@ -240,28 +243,44 @@ export function MapWithDrawing({
     e.preventDefault();
     e.stopPropagation();
 
-    // Get coalesced events for smoother drawing on mobile devices
-    // Browsers may combine multiple touch events into one, causing gaps in the line
-    const coalescedEvents = e.nativeEvent.getCoalescedEvents?.() ?? [e.nativeEvent];
+    // Use requestAnimationFrame to throttle drawing for better performance
+    // Cancel previous frame if not processed yet
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+    }
 
-    for (const event of coalescedEvents) {
-      const point = screenToCanvas(event.clientX, event.clientY);
-      if (point && lastPointRef.current) {
-        drawLine(lastPointRef.current, point);
-        lastPointRef.current = point;
+    rafIdRef.current = requestAnimationFrame(() => {
+      // Get coalesced events for smoother drawing on mobile devices
+      // Browsers may combine multiple touch events into one, causing gaps in the line
+      const coalescedEvents = e.nativeEvent.getCoalescedEvents?.() ?? [e.nativeEvent];
 
-        // Store geographic coordinates for undo/redo
-        const latLng = canvasToLatLng(point);
-        if (latLng) {
-          currentStrokePointsRef.current.push(latLng);
+      for (const event of coalescedEvents) {
+        const point = screenToCanvas(event.clientX, event.clientY);
+        if (point && lastPointRef.current) {
+          drawLine(lastPointRef.current, point);
+          lastPointRef.current = point;
+
+          // Store geographic coordinates for undo/redo
+          const latLng = canvasToLatLng(point);
+          if (latLng) {
+            currentStrokePointsRef.current.push(latLng);
+          }
         }
       }
-    }
+
+      rafIdRef.current = null;
+    });
   }, [drawingState.mode, screenToCanvas, canvasToLatLng, drawLine, isDrawableZoom]);
 
   // Handle pointer up
   const handlePointerUp = useCallback(() => {
     if (!isDrawingRef.current) return;
+
+    // Cancel any pending RAF
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
 
     isDrawingRef.current = false;
     lastPointRef.current = null;
@@ -416,6 +435,12 @@ export function MapWithDrawing({
     setIsMapReady(true);
 
     return () => {
+      // Cleanup RAF
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+
       window.removeEventListener('resize', handleResize);
       if (canvasRef.current && canvasRef.current.parentNode) {
         canvasRef.current.parentNode.removeChild(canvasRef.current);
@@ -601,7 +626,10 @@ export function MapWithDrawing({
   }, [redrawAll]);
 
   // Redraw when strokes or visible layers change (undo/redo)
+  // Skip redraw during active drawing to avoid performance issues
   useEffect(() => {
+    if (isDrawingRef.current) return;
+
     if (strokes !== undefined) {
       redrawStrokes(strokes, visibleLayerIds);
     }
