@@ -78,11 +78,25 @@ export function App({ canvasId }: AppProps) {
       }
       setIsInitialized(true);
     } else if (!canvasId && !canvas.isLoading) {
-      // New canvas - use default position
-      setMapPosition(DEFAULT_POSITION);
-      setIsInitialized(true);
+      // New canvas - create canvas and layer immediately to avoid delay on first stroke
+      const initializeNewCanvas = async () => {
+        try {
+          const newCanvasId = await canvas.createCanvas(DEFAULT_POSITION);
+          if (newCanvasId) {
+            await layers.createDefaultLayerIfNeeded(newCanvasId);
+          }
+          setMapPosition(DEFAULT_POSITION);
+          setIsInitialized(true);
+        } catch (err) {
+          console.error('Failed to initialize new canvas:', err);
+          // Fallback to default position without canvas
+          setMapPosition(DEFAULT_POSITION);
+          setIsInitialized(true);
+        }
+      };
+      void initializeNewCanvas();
     }
-  }, [canvas.canvas, canvas.isLoading, canvasId, isInitialized]);
+  }, [canvas.canvas, canvas.isLoading, canvasId, isInitialized, canvas.createCanvas, layers.createDefaultLayerIfNeeded]);
 
   // Load layers when canvas is available
   useEffect(() => {
@@ -226,20 +240,11 @@ export function App({ canvasId }: AppProps) {
         undoRedo.push(strokeData);
       }
 
-      // Create canvas if needed, capture ID for later use
-      let currentCanvasId = canvas.canvas?.id;
+      // Canvas and layer should already exist (created at initialization)
+      const currentCanvasId = canvas.canvas?.id;
       if (!currentCanvasId) {
-        if (!mapPosition) return;
-        try {
-          currentCanvasId = await canvas.createCanvas(mapPosition);
-          // Create default layer for new canvas
-          if (currentCanvasId) {
-            await layers.createDefaultLayerIfNeeded(currentCanvasId);
-          }
-        } catch (err) {
-          console.error('Failed to create canvas:', err);
-          return;
-        }
+        console.error('Canvas not initialized - should not happen');
+        return;
       }
 
       // Extract and save tiles
