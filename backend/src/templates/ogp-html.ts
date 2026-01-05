@@ -80,9 +80,13 @@ export function generateCanvasOGPMetadata(
   ogpImageKey: string | null,
   baseUrl: string
 ): OGPMetadata {
-  const title = placeName
-    ? `${placeName}周辺のお絵かきマップ`
-    : 'お絵かきマップ';
+  let title = 'お絵かきマップ';
+  if (placeName) {
+    // 「周辺」で終わっている場合は重複を避ける
+    title = placeName.endsWith('周辺')
+      ? `${placeName}のお絵かきマップ`
+      : `${placeName}周辺のお絵かきマップ`;
+  }
 
   const imageUrl = ogpImageKey
     ? `${baseUrl}/api/ogp/image/${canvasId}.png`
