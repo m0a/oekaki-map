@@ -206,14 +206,15 @@ export function App({ canvasId }: AppProps) {
     (position: MapPosition) => {
       setMapPosition(position);
 
-      // Update canvas position in backend if we have a canvas
-      if (canvas.canvas) {
+      // Update canvas position in backend if we have a canvas and there's content to save
+      // Skip auto-save of position until user has drawn something
+      if (canvas.canvas && undoRedo.canUndo) {
         autoSave.scheduleSave(async () => {
           await canvas.updatePosition(position);
         });
       }
     },
-    [canvas.canvas, canvas.updatePosition, autoSave]
+    [canvas.canvas, canvas.updatePosition, autoSave, undoRedo.canUndo]
   );
 
   // Handle canvas origin initialization
@@ -252,10 +253,16 @@ export function App({ canvasId }: AppProps) {
       const boundsCenter = bounds.getCenter();
       const targetZoom = Math.round(zoom);
 
-      // Capture canvasId in closure to ensure it's available when the save runs
+      // Capture canvasId and position in closure to ensure they're available when the save runs
       const canvasIdToSave = currentCanvasId;
+      const positionToSave = mapPosition;
       autoSave.scheduleSave(async () => {
         try {
+          // Update position on first stroke (since we skip auto-save until drawing)
+          if (positionToSave && undoRedo.strokes.length === 1) {
+            await canvas.updatePosition(positionToSave);
+          }
+
           // Use the captured canvas copy instead of live canvas element
           const tiles = await extractTilesFromCanvas(
             canvasCopy,
