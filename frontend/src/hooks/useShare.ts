@@ -14,7 +14,9 @@ interface SharePosition {
 interface ShareOptions {
   /** Map instance for screenshot capture */
   map?: L.Map | null;
-  /** Stroke data to include in screenshot */
+  /** Drawing canvas element containing saved tiles */
+  drawingCanvas?: HTMLCanvasElement | null;
+  /** Stroke data to include in screenshot (current session strokes) */
   strokes?: StrokeData[];
   /** Visible layer IDs to filter strokes */
   visibleLayerIds?: string[];
@@ -61,7 +63,7 @@ export function useShare(): UseShareReturn {
     position: SharePosition,
     options: ShareOptions = {}
   ) => {
-    const { map, strokes, visibleLayerIds, skipPreview = false } = options;
+    const { map, drawingCanvas, strokes, visibleLayerIds, skipPreview = false } = options;
 
     setIsSharing(true);
     setError(null);
@@ -77,8 +79,11 @@ export function useShare(): UseShareReturn {
         try {
           setProgress('プレビュー画像を生成中...');
 
-          // Capture map screenshot with strokes overlay
+          // Capture map screenshot with drawing canvas and strokes overlay
           const screenshotOptions: Parameters<typeof captureMapScreenshot>[1] = {};
+          if (drawingCanvas) {
+            screenshotOptions.drawingCanvas = drawingCanvas;
+          }
           if (strokes) {
             screenshotOptions.strokes = strokes;
           }

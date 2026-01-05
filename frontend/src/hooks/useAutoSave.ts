@@ -17,28 +17,36 @@ export function useAutoSave(): UseAutoSaveReturn {
   const [error, setError] = useState<string | null>(null);
 
   const timeoutRef = useRef<number | null>(null);
-  const pendingSaveFnRef = useRef<(() => Promise<void>) | null>(null);
+  // Queue of pending save functions instead of single reference
+  const pendingSaveFnsRef = useRef<Array<() => Promise<void>>>([]);
+  const isExecutingRef = useRef(false);
 
-  // Cancel any pending save
+  // Cancel any pending save timer (but keep queued functions)
   const cancelSave = useCallback(() => {
     if (timeoutRef.current !== null) {
       window.clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
-    pendingSaveFnRef.current = null;
   }, []);
 
-  // Execute the save
-  const executeSave = useCallback(async () => {
-    const saveFn = pendingSaveFnRef.current;
-    if (!saveFn) return;
+  // Execute all queued saves
+  const executeSaves = useCallback(async () => {
+    if (isExecutingRef.current) return;
+    if (pendingSaveFnsRef.current.length === 0) return;
 
-    pendingSaveFnRef.current = null;
+    isExecutingRef.current = true;
     setIsSaving(true);
     setError(null);
 
+    // Take all pending save functions
+    const saveFns = [...pendingSaveFnsRef.current];
+    pendingSaveFnsRef.current = [];
+
     try {
-      await saveFn();
+      // Execute all saves sequentially
+      for (const saveFn of saveFns) {
+        await saveFn();
+      }
       setLastSaved(new Date());
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Save failed';
@@ -46,37 +54,41 @@ export function useAutoSave(): UseAutoSaveReturn {
       console.error('Auto-save failed:', err);
     } finally {
       setIsSaving(false);
+      isExecutingRef.current = false;
+
+      // If more saves were queued during execution, schedule another run
+      if (pendingSaveFnsRef.current.length > 0) {
+        timeoutRef.current = window.setTimeout(() => {
+          timeoutRef.current = null;
+          void executeSaves();
+        }, DEBOUNCE_DELAY);
+      }
     }
   }, []);
 
-  // Schedule a save with debounce
+  // Schedule a save with debounce (queues instead of replacing)
   const scheduleSave = useCallback(
     (saveFn: () => Promise<void>) => {
-      // Cancel any existing scheduled save
+      // Add to queue instead of replacing
+      pendingSaveFnsRef.current.push(saveFn);
+
+      // Reset debounce timer
       cancelSave();
 
-      // Store the save function
-      pendingSaveFnRef.current = saveFn;
-
-      // Schedule new save
+      // Schedule execution
       timeoutRef.current = window.setTimeout(() => {
         timeoutRef.current = null;
-        void executeSave();
+        void executeSaves();
       }, DEBOUNCE_DELAY);
     },
-    [cancelSave, executeSave]
+    [cancelSave, executeSaves]
   );
 
-  // Immediately execute any pending save (flush the queue)
+  // Immediately execute all pending saves (flush the queue)
   const flushSave = useCallback(async () => {
-    if (timeoutRef.current !== null) {
-      window.clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
-    if (pendingSaveFnRef.current) {
-      await executeSave();
-    }
-  }, [executeSave]);
+    cancelSave();
+    await executeSaves();
+  }, [cancelSave, executeSaves]);
 
   return {
     isSaving,
