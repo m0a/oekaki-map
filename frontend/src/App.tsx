@@ -23,6 +23,7 @@ export function App({ canvasId }: AppProps) {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isLayerPanelOpen, setIsLayerPanelOpen] = useState(false);
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
+  const [drawingCanvas, setDrawingCanvas] = useState<HTMLCanvasElement | null>(null);
 
   // Canvas origin tracking
   const canvasOriginRef = useRef<L.LatLng | null>(null);
@@ -151,12 +152,17 @@ export function App({ canvasId }: AppProps) {
   // Share handler
   const handleShare = useCallback(async () => {
     if (!canvas.canvas?.id || !mapPosition) return;
-    await share.share(canvas.canvas.id, mapPosition, { map: mapInstance });
-  }, [canvas.canvas?.id, mapPosition, share.share, mapInstance]);
+    await share.share(canvas.canvas.id, mapPosition, { map: mapInstance, drawingCanvas });
+  }, [canvas.canvas?.id, mapPosition, share.share, mapInstance, drawingCanvas]);
 
   // Map ready handler
   const handleMapReady = useCallback((map: L.Map) => {
     setMapInstance(map);
+  }, []);
+
+  // Canvas ready handler
+  const handleCanvasReady = useCallback((canvas: HTMLCanvasElement) => {
+    setDrawingCanvas(canvas);
   }, []);
 
   // Geolocation handler - move map to current position
@@ -301,6 +307,7 @@ export function App({ canvasId }: AppProps) {
         onStrokeEnd={handleStrokeEnd}
         onCanvasOriginInit={handleCanvasOriginInit}
         onMapReady={handleMapReady}
+        onCanvasReady={handleCanvasReady}
         tiles={canvas.tiles}
         canvasId={canvas.canvas?.id}
         onFlushSave={autoSave.flushSave}
