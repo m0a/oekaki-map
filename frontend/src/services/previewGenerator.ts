@@ -88,6 +88,9 @@ export async function captureMapScreenshot(
     // Wait for map tiles to finish loading
     await waitForTilesToLoad(map);
 
+    // Additional wait to ensure tiles are rendered
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
     const { SimpleMapScreenshoter } = await import(
       'leaflet-simple-map-screenshoter'
     );
