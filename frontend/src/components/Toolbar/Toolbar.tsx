@@ -31,6 +31,7 @@ interface ToolbarProps {
   currentPosition?: { lat: number; lng: number; zoom: number } | undefined;
   onShare?: (() => void) | undefined;
   isSharing?: boolean | undefined;
+  isExistingCanvas?: boolean | undefined;
   // Geolocation functionality
   onGetLocation?: (() => void) | undefined;
   isGettingLocation?: boolean | undefined;
@@ -53,6 +54,7 @@ export function Toolbar({
   currentPosition,
   onShare,
   isSharing,
+  isExistingCanvas,
   onGetLocation,
   isGettingLocation,
 }: ToolbarProps) {
@@ -289,8 +291,8 @@ export function Toolbar({
         </>
       )}
 
-      {/* Share button */}
-      {onShare && canvasId && currentPosition && (
+      {/* Share button - show only if there's content to share */}
+      {onShare && canvasId && currentPosition && (canUndo || isExistingCanvas) && (
         <>
           <Separator />
           <ShareButton

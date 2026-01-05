@@ -78,11 +78,25 @@ export function App({ canvasId }: AppProps) {
       }
       setIsInitialized(true);
     } else if (!canvasId && !canvas.isLoading) {
-      // New canvas - use default position
-      setMapPosition(DEFAULT_POSITION);
-      setIsInitialized(true);
+      // New canvas - create canvas and layer immediately to avoid delay on first stroke
+      const initializeNewCanvas = async () => {
+        try {
+          const newCanvasId = await canvas.createCanvas(DEFAULT_POSITION);
+          if (newCanvasId) {
+            await layers.createDefaultLayerIfNeeded(newCanvasId);
+          }
+          setMapPosition(DEFAULT_POSITION);
+          setIsInitialized(true);
+        } catch (err) {
+          console.error('Failed to initialize new canvas:', err);
+          // Fallback to default position without canvas
+          setMapPosition(DEFAULT_POSITION);
+          setIsInitialized(true);
+        }
+      };
+      void initializeNewCanvas();
     }
-  }, [canvas.canvas, canvas.isLoading, canvasId, isInitialized]);
+  }, [canvas.canvas, canvas.isLoading, canvasId, isInitialized, canvas.createCanvas, layers.createDefaultLayerIfNeeded]);
 
   // Load layers when canvas is available
   useEffect(() => {
@@ -192,14 +206,15 @@ export function App({ canvasId }: AppProps) {
     (position: MapPosition) => {
       setMapPosition(position);
 
-      // Update canvas position in backend if we have a canvas
-      if (canvas.canvas) {
+      // Update canvas position in backend if we have a canvas and there's content to save
+      // Skip auto-save of position until user has drawn something
+      if (canvas.canvas && undoRedo.canUndo) {
         autoSave.scheduleSave(async () => {
           await canvas.updatePosition(position);
         });
       }
     },
-    [canvas.canvas, canvas.updatePosition, autoSave]
+    [canvas.canvas, canvas.updatePosition, autoSave, undoRedo.canUndo]
   );
 
   // Handle canvas origin initialization
@@ -210,7 +225,7 @@ export function App({ canvasId }: AppProps) {
 
   // Handle stroke end - save canvas state and add to undo history
   const handleStrokeEnd = useCallback(
-    async (canvasElement: HTMLCanvasElement, bounds: L.LatLngBounds, zoom: number, strokeData?: StrokeData) => {
+    (canvasElement: HTMLCanvasElement, bounds: L.LatLngBounds, zoom: number, strokeData?: StrokeData) => {
       // IMPORTANT: Capture canvas content BEFORE updating undo state
       // This prevents race condition where redrawAll modifies canvas before extraction
       const canvasCopy = document.createElement('canvas');
@@ -226,20 +241,11 @@ export function App({ canvasId }: AppProps) {
         undoRedo.push(strokeData);
       }
 
-      // Create canvas if needed, capture ID for later use
-      let currentCanvasId = canvas.canvas?.id;
+      // Canvas and layer should already exist (created at initialization)
+      const currentCanvasId = canvas.canvas?.id;
       if (!currentCanvasId) {
-        if (!mapPosition) return;
-        try {
-          currentCanvasId = await canvas.createCanvas(mapPosition);
-          // Create default layer for new canvas
-          if (currentCanvasId) {
-            await layers.createDefaultLayerIfNeeded(currentCanvasId);
-          }
-        } catch (err) {
-          console.error('Failed to create canvas:', err);
-          return;
-        }
+        console.error('Canvas not initialized - should not happen');
+        return;
       }
 
       // Extract and save tiles
@@ -247,10 +253,16 @@ export function App({ canvasId }: AppProps) {
       const boundsCenter = bounds.getCenter();
       const targetZoom = Math.round(zoom);
 
-      // Capture canvasId in closure to ensure it's available when the save runs
+      // Capture canvasId and position in closure to ensure they're available when the save runs
       const canvasIdToSave = currentCanvasId;
+      const positionToSave = mapPosition;
       autoSave.scheduleSave(async () => {
         try {
+          // Update position on first stroke (since we skip auto-save until drawing)
+          if (positionToSave && undoRedo.strokes.length === 1) {
+            await canvas.updatePosition(positionToSave);
+          }
+
           // Use the captured canvas copy instead of live canvas element
           const tiles = await extractTilesFromCanvas(
             canvasCopy,
@@ -339,6 +351,7 @@ export function App({ canvasId }: AppProps) {
         currentPosition={mapPosition ?? undefined}
         onShare={handleShare}
         isSharing={share.isSharing}
+        isExistingCanvas={!!canvasId}
         onGetLocation={handleGetLocation}
         isGettingLocation={geolocation.isLoading}
       />
