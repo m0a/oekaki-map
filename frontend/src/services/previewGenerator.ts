@@ -6,7 +6,9 @@ interface ScreenshotOptions {
   width?: number;
   height?: number;
   hideControls?: boolean;
-  /** Stroke data to render on top of the map */
+  /** Drawing canvas element containing saved tiles */
+  drawingCanvas?: HTMLCanvasElement | null;
+  /** Stroke data to render on top of the map (current session strokes) */
   strokes?: StrokeData[];
   /** Visible layer IDs to filter strokes */
   visibleLayerIds?: string[];
@@ -20,6 +22,7 @@ export async function captureMapScreenshot(
     width = OGP_IMAGE_WIDTH,
     height = OGP_IMAGE_HEIGHT,
     hideControls = true,
+    drawingCanvas,
     strokes,
     visibleLayerIds,
   } = options;
@@ -49,10 +52,11 @@ export async function captureMapScreenshot(
       return null;
     }
 
-    // Composite map and strokes
-    const compositedDataUrl = await compositeMapAndStrokes(
+    // Composite map, drawing canvas, and strokes
+    const compositedDataUrl = await compositeMapAndDrawings(
       mapImageDataUrl,
       map,
+      drawingCanvas,
       strokes,
       visibleLayerIds,
       width,
@@ -67,11 +71,13 @@ export async function captureMapScreenshot(
 }
 
 /**
- * Composite the map screenshot with strokes rendered on a transparent canvas
+ * Composite the map screenshot with drawing canvas and strokes
+ * Order: map background -> drawing canvas (saved tiles) -> strokes (current session)
  */
-async function compositeMapAndStrokes(
+async function compositeMapAndDrawings(
   mapDataUrl: string,
   map: L.Map,
+  drawingCanvas: HTMLCanvasElement | null | undefined,
   strokes: StrokeData[] | undefined,
   visibleLayerIds: string[] | undefined,
   targetWidth: number,
@@ -90,6 +96,16 @@ async function compositeMapAndStrokes(
         return;
       }
 
+      // Calculate scale factor from map size to target size
+      const mapSize = map.getSize();
+      const scaleX = targetWidth / mapSize.x;
+      const scaleY = targetHeight / mapSize.y;
+      const scale = Math.min(scaleX, scaleY);
+
+      // Calculate offset to center the content
+      const offsetX = (targetWidth - mapSize.x * scale) / 2;
+      const offsetY = (targetHeight - mapSize.y * scale) / 2;
+
       // Calculate crop/resize for map image (center crop to target aspect ratio)
       const sourceAspect = mapImg.width / mapImg.height;
       const targetAspect = targetWidth / targetHeight;
@@ -107,21 +123,26 @@ async function compositeMapAndStrokes(
         sy = (mapImg.height - sh) / 2;
       }
 
-      // Draw map as background
+      // 1. Draw map as background
       ctx.drawImage(mapImg, sx, sy, sw, sh, 0, 0, targetWidth, targetHeight);
 
-      // Draw strokes on top if available
+      // 2. Draw the drawing canvas (saved tiles) on top if available
+      if (drawingCanvas && drawingCanvas.width > 0 && drawingCanvas.height > 0) {
+        // Use the same scale and offset as for strokes
+        const scaledWidth = drawingCanvas.width * scale;
+        const scaledHeight = drawingCanvas.height * scale;
+        const canvasOffsetX = (targetWidth - scaledWidth) / 2;
+        const canvasOffsetY = (targetHeight - scaledHeight) / 2;
+
+        ctx.drawImage(
+          drawingCanvas,
+          0, 0, drawingCanvas.width, drawingCanvas.height,
+          canvasOffsetX, canvasOffsetY, scaledWidth, scaledHeight
+        );
+      }
+
+      // 3. Draw strokes on top if available (current session strokes)
       if (strokes && strokes.length > 0) {
-        // Calculate scale factor from map size to target size
-        const mapSize = map.getSize();
-        const scaleX = targetWidth / mapSize.x;
-        const scaleY = targetHeight / mapSize.y;
-        const scale = Math.min(scaleX, scaleY);
-
-        // Calculate offset to center the content
-        const offsetX = (targetWidth - mapSize.x * scale) / 2;
-        const offsetY = (targetHeight - mapSize.y * scale) / 2;
-
         const currentZoom = map.getZoom();
 
         for (const stroke of strokes) {
