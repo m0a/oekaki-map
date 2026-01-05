@@ -13,6 +13,7 @@ interface MapWithDrawingProps {
   drawingState: DrawingState;
   onStrokeEnd?: (canvas: HTMLCanvasElement, bounds: L.LatLngBounds, zoom: number, strokeData?: StrokeData) => void;
   onCanvasOriginInit?: (origin: L.LatLng, zoom: number) => void;
+  onMapReady?: (map: L.Map) => void;
   tiles?: TileInfo[] | undefined;
   canvasId?: string | undefined;
   onFlushSave?: () => Promise<void>;
@@ -38,6 +39,7 @@ export function MapWithDrawing({
   drawingState,
   onStrokeEnd,
   onCanvasOriginInit,
+  onMapReady,
   tiles,
   canvasId,
   onFlushSave,
@@ -327,6 +329,9 @@ export function MapWithDrawing({
 
     // Notify parent about canvas origin
     onCanvasOriginInit?.(canvasOriginRef.current, canvasZoomRef.current);
+
+    // Notify parent that map is ready
+    onMapReady?.(map);
 
     // Create canvas element (positioned over the map)
     const canvas = document.createElement('canvas');
