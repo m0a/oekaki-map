@@ -344,6 +344,7 @@ export function App({ canvasId }: AppProps) {
         currentPosition={mapPosition ?? undefined}
         onShare={handleShare}
         isSharing={share.isSharing}
+        isExistingCanvas={!!canvasId}
         onGetLocation={handleGetLocation}
         isGettingLocation={geolocation.isLoading}
       />

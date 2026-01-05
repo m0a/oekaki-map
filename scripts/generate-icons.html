@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generate Icons from SVG</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        canvas {
+            border: 1px solid #ccc;
+            margin: 20px 0;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 10px 5px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .icon-set {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #eee;
+            border-radius: 8px;
+        }
+        .instructions {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Generate PNG Icons from SVG</h1>
+
+    <div class="instructions">
+        <h3>Instructions:</h3>
+        <ol>
+            <li>Click "Generate All Icons" button</li>
+            <li>Download each icon using the download buttons</li>
+            <li>Save them to <code>frontend/public/</code> with the correct filenames</li>
+        </ol>
+    </div>
+
+    <button onclick="generateAllIcons()" style="background: #4CAF50; color: white; font-weight: bold;">
+        Generate All Icons
+    </button>
+
+    <div id="iconContainer"></div>
+
+    <script>
+        const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Map background -->
+  <rect x="2" y="4" width="28" height="24" rx="2" fill="#e8e8e8" stroke="#888" stroke-width="1"/>
+
+  <!-- Map roads/lines -->
+  <path d="M2 14 h28 M12 4 v24 M22 4 v24" stroke="#ccc" stroke-width="1" fill="none"/>
+
+  <!-- Map pin -->
+  <circle cx="17" cy="12" r="3" fill="#e74c3c"/>
+  <path d="M17 15 L17 18" stroke="#e74c3c" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Pencil -->
+  <g transform="rotate(-45 8 22)">
+    <rect x="4" y="14" width="8" height="16" rx="1" fill="#f39c12"/>
+    <polygon points="4,30 8,34 12,30" fill="#f5d6a7"/>
+    <rect x="4" y="14" width="8" height="3" fill="#e74c3c"/>
+    <polygon points="6,34 8,36 10,34" fill="#333"/>
+  </g>
+</svg>`;
+
+        const iconSizes = [
+            { name: 'apple-touch-icon.png', size: 180, description: 'iOS Home Screen Icon' },
+            { name: 'android-chrome-192x192.png', size: 192, description: 'Android Chrome Icon' },
+            { name: 'android-chrome-512x512.png', size: 512, description: 'Android Chrome Icon (High Res)' }
+        ];
+
+        function svgToPng(svgString, size, callback) {
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+
+            const img = new Image();
+            const blob = new Blob([svgString], { type: 'image/svg+xml' });
+            const url = URL.createObjectURL(blob);
+
+            img.onload = function() {
+                ctx.drawImage(img, 0, 0, size, size);
+                URL.revokeObjectURL(url);
+                callback(canvas);
+            };
+
+            img.src = url;
+        }
+
+        function downloadCanvas(canvas, filename) {
+            canvas.toBlob(function(blob) {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(url);
+            }, 'image/png');
+        }
+
+        function generateAllIcons() {
+            const container = document.getElementById('iconContainer');
+            container.innerHTML = '';
+
+            iconSizes.forEach(iconConfig => {
+                const iconDiv = document.createElement('div');
+                iconDiv.className = 'icon-set';
+                iconDiv.innerHTML = `
+                    <h3>${iconConfig.name}</h3>
+                    <p>${iconConfig.description} (${iconConfig.size}x${iconConfig.size}px)</p>
+                `;
+
+                svgToPng(svgContent, iconConfig.size, function(canvas) {
+                    iconDiv.appendChild(canvas);
+
+                    const downloadBtn = document.createElement('button');
+                    downloadBtn.textContent = `Download ${iconConfig.name}`;
+                    downloadBtn.style.background = '#2196F3';
+                    downloadBtn.style.color = 'white';
+                    downloadBtn.onclick = function() {
+                        downloadCanvas(canvas, iconConfig.name);
+                    };
+                    iconDiv.appendChild(downloadBtn);
+                });
+
+                container.appendChild(iconDiv);
+            });
+        }
+    </script>
+</body>
+</html>
