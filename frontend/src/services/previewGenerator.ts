@@ -14,6 +14,63 @@ interface ScreenshotOptions {
   visibleLayerIds?: string[];
 }
 
+/**
+ * Wait for all map tiles to finish loading
+ */
+function waitForTilesToLoad(map: L.Map, timeout: number = 5000): Promise<void> {
+  return new Promise((resolve) => {
+    let pendingTiles = 0;
+    let resolved = false;
+
+    const timeoutId = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        resolve();
+      }
+    }, timeout);
+
+    // Find all tile layers
+    map.eachLayer((layer) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      if ('_tiles' in layer && typeof (layer as any)._tiles === 'object') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+        const tiles = (layer as any)._tiles;
+
+        // Check if any tiles are still loading
+        for (const key in tiles) {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+          const tile = tiles[key];
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+          if (tile && tile.el && !tile.loaded) {
+            pendingTiles++;
+
+            const onLoad = () => {
+              pendingTiles--;
+              if (pendingTiles === 0 && !resolved) {
+                resolved = true;
+                clearTimeout(timeoutId);
+                resolve();
+              }
+            };
+
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+            tile.el.addEventListener('load', onLoad, { once: true });
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+            tile.el.addEventListener('error', onLoad, { once: true });
+          }
+        }
+      }
+    });
+
+    // If no tiles are loading, resolve immediately
+    if (pendingTiles === 0 && !resolved) {
+      resolved = true;
+      clearTimeout(timeoutId);
+      resolve();
+    }
+  });
+}
+
 export async function captureMapScreenshot(
   map: L.Map,
   options: ScreenshotOptions = {}
@@ -28,6 +85,9 @@ export async function captureMapScreenshot(
   } = options;
 
   try {
+    // Wait for map tiles to finish loading
+    await waitForTilesToLoad(map);
+
     const { SimpleMapScreenshoter } = await import(
       'leaflet-simple-map-screenshoter'
     );
