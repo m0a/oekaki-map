@@ -94,6 +94,26 @@ Backend exports types from `backend/src/types/index.ts`. Frontend imports the sa
 
 D1 migrations run automatically before each deployment.
 
+## Development Workflow
+
+### Preview Environment での確認（重要）
+
+**開発時は必ずプレビュー環境で動作確認すること。**
+
+1. **PR作成後**: `oekaki-map-pr-{N}.abe00makoto.workers.dev` でテスト
+2. **mainマージ後**: `oekaki-map-main-preview.abe00makoto.workers.dev` で確認
+3. **リリース前**: main previewで最終確認してからタグを作成
+
+### マイグレーションを伴うPRの注意
+
+**DBマイグレーションを含むPRは特別な手順が必要：**
+
+1. PRをmainにマージ（マイグレーションが実行される）
+2. **Main Preview環境で動作確認を行う**（本番DBと同じスキーマになる）
+3. 問題がなければタグを作成してProduction デプロイ
+
+マイグレーションは各環境で自動実行されるが、スキーマ変更の影響はPreview環境で先に確認すること。
+
 ## Specs
 
 Feature specifications are in `specs/` directory. Each feature has `spec.md`, `plan.md`, and optionally `tasks.md`.
