@@ -224,7 +224,7 @@ export function App({ canvasId }: AppProps) {
 
   // Handle stroke end - save canvas state and add to undo history
   const handleStrokeEnd = useCallback(
-    async (canvasElement: HTMLCanvasElement, bounds: L.LatLngBounds, zoom: number, strokeData?: StrokeData) => {
+    (canvasElement: HTMLCanvasElement, bounds: L.LatLngBounds, zoom: number, strokeData?: StrokeData) => {
       // IMPORTANT: Capture canvas content BEFORE updating undo state
       // This prevents race condition where redrawAll modifies canvas before extraction
       const canvasCopy = document.createElement('canvas');
