@@ -14,6 +14,7 @@ interface MapWithDrawingProps {
   onStrokeEnd?: (canvas: HTMLCanvasElement, bounds: L.LatLngBounds, zoom: number, strokeData?: StrokeData) => void;
   onCanvasOriginInit?: (origin: L.LatLng, zoom: number) => void;
   onMapReady?: (map: L.Map) => void;
+  onCanvasReady?: (canvas: HTMLCanvasElement) => void;
   tiles?: TileInfo[] | undefined;
   canvasId?: string | undefined;
   onFlushSave?: () => Promise<void>;
@@ -40,6 +41,7 @@ export function MapWithDrawing({
   onStrokeEnd,
   onCanvasOriginInit,
   onMapReady,
+  onCanvasReady,
   tiles,
   canvasId,
   onFlushSave,
@@ -348,6 +350,9 @@ export function MapWithDrawing({
 
     containerRef.current.appendChild(canvas);
     canvasRef.current = canvas;
+
+    // Notify parent that canvas is ready
+    onCanvasReady?.(canvas);
 
     // Sync canvas transform during pan
     const syncCanvasPan = () => {

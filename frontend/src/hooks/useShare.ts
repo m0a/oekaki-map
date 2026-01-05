@@ -13,6 +13,8 @@ interface SharePosition {
 interface ShareOptions {
   /** Map instance for screenshot capture */
   map?: L.Map | null;
+  /** Drawing canvas element to include in screenshot */
+  drawingCanvas?: HTMLCanvasElement | null;
   /** Skip OGP preview generation (for testing or when map is unavailable) */
   skipPreview?: boolean;
 }
@@ -56,7 +58,7 @@ export function useShare(): UseShareReturn {
     position: SharePosition,
     options: ShareOptions = {}
   ) => {
-    const { map, skipPreview = false } = options;
+    const { map, drawingCanvas, skipPreview = false } = options;
 
     setIsSharing(true);
     setError(null);
@@ -72,8 +74,8 @@ export function useShare(): UseShareReturn {
         try {
           setProgress('プレビュー画像を生成中...');
 
-          // Capture map screenshot
-          const screenshot = await captureMapScreenshot(map);
+          // Capture map screenshot with drawing canvas overlay
+          const screenshot = await captureMapScreenshot(map, { drawingCanvas: drawingCanvas ?? null });
 
           if (screenshot) {
             setProgress('地名を取得中...');
