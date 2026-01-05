@@ -48,6 +48,9 @@ export function generateOGPHtml(
   <meta name="twitter:image:alt" content="${escaped.title}" />
 
   <meta name="theme-color" content="#ffffff" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="manifest" href="/manifest.json" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
 </head>
 <body>
