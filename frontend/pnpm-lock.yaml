@@ -23,6 +23,9 @@ importers:
       leaflet:
         specifier: ^1.9.4
         version: 1.9.4
+      leaflet-image:
+        specifier: ^0.4.0
+        version: 0.4.0
       leaflet-simple-map-screenshoter:
         specifier: ^0.5.0
         version: 0.5.0
@@ -883,6 +886,9 @@ packages:
   csstype@3.2.3:
     resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
 
+  d3-queue@2.0.3:
+    resolution: {integrity: sha512-ejbdHqZYEmk9ns/ljSbEcD6VRiuNwAkZMdFf6rsUb3vHROK5iMFd8xewDQnUVr6m/ba2BG63KmR/LySfsluxbg==}
+
   data-urls@5.0.0:
     resolution: {integrity: sha512-ZYP5VBHshaDAiVZxjbRVcFJpc+4xGgT0bK3vzy1HLN8jTO975HEbuYzZJcHoQEY5K1a0z8YayJkyVETa08eNTg==}
     engines: {node: '>=18'}
@@ -1127,6 +1133,9 @@ packages:
     resolution: {integrity: sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg==}
     engines: {node: '>=6'}
     hasBin: true
+
+  leaflet-image@0.4.0:
+    resolution: {integrity: sha512-J/vLCHiYNXlcQ/SZbHhj/VF5k3thxTryWijoqMO9sB20KV7hlMNUZDgxcDzXnfjk4hcYcFfGbveVc1tyQ9FgYw==}
 
   leaflet-simple-map-screenshoter@0.5.0:
     resolution: {integrity: sha512-yTrPTenq+ua9X0FaZxM0xHeapA4lM641M4d6V7G0WIStUbN1hGF6SVKdJpfa3PqRBM5ZDdFKfZ4W1F8Djsz2cg==}
@@ -2264,6 +2273,8 @@ snapshots:
 
   csstype@3.2.3: {}
 
+  d3-queue@2.0.3: {}
+
   data-urls@5.0.0:
     dependencies:
       whatwg-mimetype: 4.0.0
@@ -2548,6 +2559,10 @@ snapshots:
   jsesc@3.1.0: {}
 
   json5@2.2.3: {}
+
+  leaflet-image@0.4.0:
+    dependencies:
+      d3-queue: 2.0.3
 
   leaflet-simple-map-screenshoter@0.5.0:
     dependencies:

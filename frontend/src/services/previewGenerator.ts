@@ -15,59 +15,27 @@ interface ScreenshotOptions {
 }
 
 /**
- * Wait for all map tiles to finish loading
+ * Capture map screenshot using leaflet-image
  */
-function waitForTilesToLoad(map: L.Map, timeout: number = 5000): Promise<void> {
-  return new Promise((resolve) => {
-    let pendingTiles = 0;
-    let resolved = false;
+async function captureMapWithLeafletImage(map: L.Map): Promise<HTMLCanvasElement> {
+  return new Promise((resolve, reject) => {
+    // Import leaflet-image dynamically
+    import('leaflet-image')
+      .then((leafletImageModule) => {
+        const leafletImage = leafletImageModule.default || leafletImageModule;
 
-    const timeoutId = setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        resolve();
-      }
-    }, timeout);
-
-    // Find all tile layers
-    map.eachLayer((layer) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-      if ('_tiles' in layer && typeof (layer as any)._tiles === 'object') {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-        const tiles = (layer as any)._tiles;
-
-        // Check if any tiles are still loading
-        for (const key in tiles) {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-          const tile = tiles[key];
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-          if (tile && tile.el && !tile.loaded) {
-            pendingTiles++;
-
-            const onLoad = () => {
-              pendingTiles--;
-              if (pendingTiles === 0 && !resolved) {
-                resolved = true;
-                clearTimeout(timeoutId);
-                resolve();
-              }
-            };
-
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-            tile.el.addEventListener('load', onLoad, { once: true });
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-            tile.el.addEventListener('error', onLoad, { once: true });
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+        leafletImage(map, (err: Error | null, canvas: HTMLCanvasElement) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(canvas);
           }
-        }
-      }
-    });
-
-    // If no tiles are loading, resolve immediately
-    if (pendingTiles === 0 && !resolved) {
-      resolved = true;
-      clearTimeout(timeoutId);
-      resolve();
-    }
+        });
+      })
+      .catch((err: unknown) => {
+        reject(err instanceof Error ? err : new Error('Failed to load leaflet-image'));
+      });
   });
 }
 
@@ -78,46 +46,21 @@ export async function captureMapScreenshot(
   const {
     width = OGP_IMAGE_WIDTH,
     height = OGP_IMAGE_HEIGHT,
-    hideControls = true,
     drawingCanvas,
     strokes,
     visibleLayerIds,
   } = options;
 
   try {
-    // Wait for map tiles to finish loading
-    await waitForTilesToLoad(map);
+    // Capture map screenshot using leaflet-image
+    const mapCanvas = await captureMapWithLeafletImage(map);
 
-    // Additional wait to ensure tiles are rendered
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    const { SimpleMapScreenshoter } = await import(
-      'leaflet-simple-map-screenshoter'
-    );
-
-    const screenshoter = new SimpleMapScreenshoter({
-      cropImageByInnerWH: true,
-      mimeType: 'image/png',
-      hideElementsWithSelectors: hideControls
-        ? ['.leaflet-control-container']
-        : [],
-    });
-
-    screenshoter.addTo(map);
-
-    const result = await screenshoter.takeScreen('image');
-    const mapImageDataUrl = typeof result === 'string' ? result : null;
-
-    map.removeControl(screenshoter);
-
-    if (!mapImageDataUrl) {
-      console.warn('Screenshot capture returned empty');
-      return null;
-    }
+    // Convert canvas to data URL
+    const mapDataUrl = mapCanvas.toDataURL('image/png');
 
     // Composite map, drawing canvas, and strokes
     const compositedDataUrl = await compositeMapAndDrawings(
-      mapImageDataUrl,
+      mapDataUrl,
       map,
       drawingCanvas,
       strokes,
