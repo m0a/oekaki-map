@@ -15,6 +15,34 @@ interface ScreenshotOptions {
 }
 
 /**
+ * Apply grayscale filter to canvas
+ */
+function applyGrayscaleFilter(canvas: HTMLCanvasElement): void {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+
+  // Convert each pixel to grayscale
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i] ?? 0;
+    const g = data[i + 1] ?? 0;
+    const b = data[i + 2] ?? 0;
+
+    // Use luminosity method for grayscale conversion
+    const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+
+    data[i] = gray;     // Red
+    data[i + 1] = gray; // Green
+    data[i + 2] = gray; // Blue
+    // Alpha channel (data[i + 3]) remains unchanged
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+}
+
+/**
  * Capture map screenshot using leaflet-image
  */
 async function captureMapWithLeafletImage(map: L.Map): Promise<HTMLCanvasElement> {
@@ -54,6 +82,9 @@ export async function captureMapScreenshot(
   try {
     // Capture map screenshot using leaflet-image
     const mapCanvas = await captureMapWithLeafletImage(map);
+
+    // Apply grayscale filter to match app's map style
+    applyGrayscaleFilter(mapCanvas);
 
     // Convert canvas to data URL
     const mapDataUrl = mapCanvas.toDataURL('image/png');
