@@ -1,12 +1,15 @@
 import type L from 'leaflet';
 import { OGP_IMAGE_WIDTH, OGP_IMAGE_HEIGHT } from '../types/index';
+import type { StrokeData } from '../types/index';
 
 interface ScreenshotOptions {
   width?: number;
   height?: number;
   hideControls?: boolean;
-  /** Drawing canvas element to composite on top of the map */
-  drawingCanvas?: HTMLCanvasElement | null;
+  /** Stroke data to render on top of the map */
+  strokes?: StrokeData[];
+  /** Visible layer IDs to filter strokes */
+  visibleLayerIds?: string[];
 }
 
 export async function captureMapScreenshot(
@@ -17,7 +20,8 @@ export async function captureMapScreenshot(
     width = OGP_IMAGE_WIDTH,
     height = OGP_IMAGE_HEIGHT,
     hideControls = true,
-    drawingCanvas,
+    strokes,
+    visibleLayerIds,
   } = options;
 
   try {
@@ -45,10 +49,12 @@ export async function captureMapScreenshot(
       return null;
     }
 
-    // Composite map and drawing canvas
-    const compositedDataUrl = await compositeMapAndCanvas(
+    // Composite map and strokes
+    const compositedDataUrl = await compositeMapAndStrokes(
       mapImageDataUrl,
-      drawingCanvas,
+      map,
+      strokes,
+      visibleLayerIds,
       width,
       height
     );
@@ -61,11 +67,13 @@ export async function captureMapScreenshot(
 }
 
 /**
- * Composite the map screenshot with the drawing canvas
+ * Composite the map screenshot with strokes rendered on a transparent canvas
  */
-async function compositeMapAndCanvas(
+async function compositeMapAndStrokes(
   mapDataUrl: string,
-  drawingCanvas: HTMLCanvasElement | null | undefined,
+  map: L.Map,
+  strokes: StrokeData[] | undefined,
+  visibleLayerIds: string[] | undefined,
   targetWidth: number,
   targetHeight: number
 ): Promise<string> {
@@ -102,24 +110,75 @@ async function compositeMapAndCanvas(
       // Draw map as background
       ctx.drawImage(mapImg, sx, sy, sw, sh, 0, 0, targetWidth, targetHeight);
 
-      // Draw the drawing canvas on top if available
-      if (drawingCanvas && drawingCanvas.width > 0 && drawingCanvas.height > 0) {
-        // Use the same crop region for the drawing canvas
-        const canvasAspect = drawingCanvas.width / drawingCanvas.height;
-        let csx = 0;
-        let csy = 0;
-        let csw = drawingCanvas.width;
-        let csh = drawingCanvas.height;
+      // Draw strokes on top if available
+      if (strokes && strokes.length > 0) {
+        // Calculate scale factor from map size to target size
+        const mapSize = map.getSize();
+        const scaleX = targetWidth / mapSize.x;
+        const scaleY = targetHeight / mapSize.y;
+        const scale = Math.min(scaleX, scaleY);
 
-        if (canvasAspect > targetAspect) {
-          csw = drawingCanvas.height * targetAspect;
-          csx = (drawingCanvas.width - csw) / 2;
-        } else if (canvasAspect < targetAspect) {
-          csh = drawingCanvas.width / targetAspect;
-          csy = (drawingCanvas.height - csh) / 2;
+        // Calculate offset to center the content
+        const offsetX = (targetWidth - mapSize.x * scale) / 2;
+        const offsetY = (targetHeight - mapSize.y * scale) / 2;
+
+        const currentZoom = map.getZoom();
+
+        for (const stroke of strokes) {
+          if (stroke.points.length === 0) continue;
+          if (visibleLayerIds && !visibleLayerIds.includes(stroke.layerId)) continue;
+
+          // Convert geographic coordinates to screen coordinates
+          const screenPoints: Array<{ x: number; y: number }> = [];
+          for (const latLng of stroke.points) {
+            const point = map.latLngToContainerPoint([latLng.lat, latLng.lng]);
+            // Apply scale and offset to match OGP image dimensions
+            screenPoints.push({
+              x: point.x * scale + offsetX,
+              y: point.y * scale + offsetY,
+            });
+          }
+
+          if (screenPoints.length === 0) continue;
+
+          // Scale thickness based on zoom difference and image scale
+          const zoomDiff = currentZoom - stroke.zoom;
+          const scaledThickness = stroke.thickness * Math.pow(2, zoomDiff) * scale;
+
+          ctx.beginPath();
+          ctx.strokeStyle = stroke.mode === 'erase' ? 'rgba(0,0,0,1)' : stroke.color;
+          ctx.lineWidth = scaledThickness;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+
+          if (stroke.mode === 'erase') {
+            ctx.globalCompositeOperation = 'destination-out';
+          } else {
+            ctx.globalCompositeOperation = 'source-over';
+          }
+
+          const firstPoint = screenPoints[0];
+          if (!firstPoint) continue;
+
+          if (screenPoints.length === 1) {
+            ctx.beginPath();
+            ctx.arc(firstPoint.x, firstPoint.y, scaledThickness / 2, 0, Math.PI * 2);
+            ctx.fillStyle = stroke.mode === 'erase' ? 'rgba(0,0,0,1)' : stroke.color;
+            ctx.fill();
+          } else {
+            ctx.moveTo(firstPoint.x, firstPoint.y);
+            for (let i = 1; i < screenPoints.length; i++) {
+              const point = screenPoints[i];
+              if (point) {
+                ctx.lineTo(point.x, point.y);
+              }
+            }
+            ctx.stroke();
+          }
         }
 
-        ctx.drawImage(drawingCanvas, csx, csy, csw, csh, 0, 0, targetWidth, targetHeight);
+        // Reset composite operation
+        ctx.globalCompositeOperation = 'source-over';
       }
 
       resolve(canvas.toDataURL('image/png'));

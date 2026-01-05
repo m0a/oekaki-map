@@ -23,7 +23,6 @@ export function App({ canvasId }: AppProps) {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isLayerPanelOpen, setIsLayerPanelOpen] = useState(false);
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
-  const [drawingCanvas, setDrawingCanvas] = useState<HTMLCanvasElement | null>(null);
 
   // Canvas origin tracking
   const canvasOriginRef = useRef<L.LatLng | null>(null);
@@ -149,20 +148,9 @@ export function App({ canvasId }: AppProps) {
     }
   }, [canvas.canvas?.id, layers.reorderLayers]);
 
-  // Share handler
-  const handleShare = useCallback(async () => {
-    if (!canvas.canvas?.id || !mapPosition) return;
-    await share.share(canvas.canvas.id, mapPosition, { map: mapInstance, drawingCanvas });
-  }, [canvas.canvas?.id, mapPosition, share.share, mapInstance, drawingCanvas]);
-
   // Map ready handler
   const handleMapReady = useCallback((map: L.Map) => {
     setMapInstance(map);
-  }, []);
-
-  // Canvas ready handler
-  const handleCanvasReady = useCallback((canvas: HTMLCanvasElement) => {
-    setDrawingCanvas(canvas);
   }, []);
 
   // Geolocation handler - move map to current position
@@ -181,6 +169,16 @@ export function App({ canvasId }: AppProps) {
   const visibleLayerIds = useMemo(() => {
     return layers.layers.filter((l) => l.visible).map((l) => l.id);
   }, [layers.layers]);
+
+  // Share handler (must be after visibleLayerIds declaration)
+  const handleShare = useCallback(async () => {
+    if (!canvas.canvas?.id || !mapPosition) return;
+    await share.share(canvas.canvas.id, mapPosition, {
+      map: mapInstance,
+      strokes: undoRedo.strokes,
+      visibleLayerIds
+    });
+  }, [canvas.canvas?.id, mapPosition, share.share, mapInstance, undoRedo.strokes, visibleLayerIds]);
 
   // Handle map position changes
   const handlePositionChange = useCallback(
@@ -307,7 +305,6 @@ export function App({ canvasId }: AppProps) {
         onStrokeEnd={handleStrokeEnd}
         onCanvasOriginInit={handleCanvasOriginInit}
         onMapReady={handleMapReady}
-        onCanvasReady={handleCanvasReady}
         tiles={canvas.tiles}
         canvasId={canvas.canvas?.id}
         onFlushSave={autoSave.flushSave}

@@ -3,6 +3,7 @@ import type L from 'leaflet';
 import { api } from '../services/api';
 import { captureMapScreenshot } from '../services/previewGenerator';
 import { reverseGeocode, getLocationLabel } from '../utils/geocoding';
+import type { StrokeData } from '../types';
 
 interface SharePosition {
   lat: number;
@@ -13,8 +14,10 @@ interface SharePosition {
 interface ShareOptions {
   /** Map instance for screenshot capture */
   map?: L.Map | null;
-  /** Drawing canvas element to include in screenshot */
-  drawingCanvas?: HTMLCanvasElement | null;
+  /** Stroke data to include in screenshot */
+  strokes?: StrokeData[];
+  /** Visible layer IDs to filter strokes */
+  visibleLayerIds?: string[];
   /** Skip OGP preview generation (for testing or when map is unavailable) */
   skipPreview?: boolean;
 }
@@ -58,7 +61,7 @@ export function useShare(): UseShareReturn {
     position: SharePosition,
     options: ShareOptions = {}
   ) => {
-    const { map, drawingCanvas, skipPreview = false } = options;
+    const { map, strokes, visibleLayerIds, skipPreview = false } = options;
 
     setIsSharing(true);
     setError(null);
@@ -74,8 +77,15 @@ export function useShare(): UseShareReturn {
         try {
           setProgress('プレビュー画像を生成中...');
 
-          // Capture map screenshot with drawing canvas overlay
-          const screenshot = await captureMapScreenshot(map, { drawingCanvas: drawingCanvas ?? null });
+          // Capture map screenshot with strokes overlay
+          const screenshotOptions: Parameters<typeof captureMapScreenshot>[1] = {};
+          if (strokes) {
+            screenshotOptions.strokes = strokes;
+          }
+          if (visibleLayerIds) {
+            screenshotOptions.visibleLayerIds = visibleLayerIds;
+          }
+          const screenshot = await captureMapScreenshot(map, screenshotOptions);
 
           if (screenshot) {
             setProgress('地名を取得中...');
