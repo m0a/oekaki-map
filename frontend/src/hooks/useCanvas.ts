@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
-import type { Canvas, MapPosition, TileCoordinate } from '../types';
+import type { Canvas, MapPosition, TileCoordinate } from '../../../backend/src/types';
 import { api } from '../services/api';
+import { client, callRpc } from '../services/rpc';
 
 interface UseCanvasReturn {
   canvas: Canvas | null;
@@ -25,19 +26,26 @@ export function useCanvas(initialCanvasId?: string): UseCanvasReturn {
     setError(null);
 
     try {
-      const { canvas: newCanvas } = await api.canvas.create({
-        centerLat: position.lat,
-        centerLng: position.lng,
-        zoom: position.zoom,
-      });
+      const { data, error } = await callRpc<{ canvas: Canvas }>(
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        client.api.canvas.$post({
+          json: {
+            centerLat: position.lat,
+            centerLng: position.lng,
+            zoom: position.zoom,
+          },
+        })
+      );
 
-      setCanvas(newCanvas);
+      if (error || !data) throw new Error(error || 'No data returned');
+
+      setCanvas(data.canvas);
       setTiles([]);
 
       // Update URL without reload
-      window.history.pushState({}, '', `/c/${newCanvas.id}`);
+      window.history.pushState({}, '', `/c/${data.canvas.id}`);
 
-      return newCanvas.id;
+      return data.canvas.id;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create canvas';
       setError(message);
@@ -53,9 +61,17 @@ export function useCanvas(initialCanvasId?: string): UseCanvasReturn {
     setError(null);
 
     try {
-      const { canvas: loadedCanvas, tiles: loadedTiles } = await api.canvas.get(canvasId);
-      setCanvas(loadedCanvas);
-      setTiles(loadedTiles);
+      const { data, error } = await callRpc<{ canvas: Canvas; tiles: TileCoordinate[] }>(
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        client.api.canvas[':id'].$get({
+          param: { id: canvasId },
+        })
+      );
+
+      if (error || !data) throw new Error(error || 'No data returned');
+
+      setCanvas(data.canvas);
+      setTiles(data.tiles);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load canvas';
       setError(message);
@@ -70,19 +86,29 @@ export function useCanvas(initialCanvasId?: string): UseCanvasReturn {
     if (!canvas) return;
 
     try {
-      const updated = await api.canvas.update(canvas.id, {
-        centerLat: position.lat,
-        centerLng: position.lng,
-        zoom: position.zoom,
-      });
+      const { data, error } = await callRpc<Canvas>(
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        client.api.canvas[':id'].$patch({
+          param: { id: canvas.id },
+          json: {
+            centerLat: position.lat,
+            centerLng: position.lng,
+            zoom: position.zoom,
+          },
+        })
+      );
 
-      setCanvas(updated);
+      if (error || !data) throw new Error(error || 'No data returned');
+
+      setCanvas(data);
     } catch (err) {
       console.error('Failed to update position:', err);
     }
   }, [canvas]);
 
   // Save tiles
+  // NOTE: Keeps manual fetch for FormData upload (Hono RPC 4.6.0 limitation)
+  // See: specs/009-hono-rpc-migration/spec.md - FormData endpoints
   const saveTiles = useCallback(
     async (tilesToSave: Array<{ z: number; x: number; y: number; blob: Blob }>, canvasIdOverride?: string): Promise<void> => {
       const canvasId = canvasIdOverride || canvas?.id;

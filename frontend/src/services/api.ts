@@ -4,7 +4,7 @@ import type {
   CreateCanvasRequest,
   GetCanvasResponse,
   SaveTilesResponse,
-} from '../types';
+} from '../../../backend/src/types';
 
 // API base URL - uses /api prefix (same origin)
 const API_BASE_URL = '/api';
@@ -15,7 +15,7 @@ export const api = {
   async healthCheck(): Promise<{ status: string; service: string }> {
     const res = await fetch(`${API_BASE_URL}/`);
     if (!res.ok) throw new Error('API health check failed');
-    return res.json() as Promise<{ status: string; service: string }>;
+    return res.json();
   },
 
   // Canvas operations
@@ -28,7 +28,7 @@ export const api = {
         body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error('Failed to create canvas');
-      return res.json() as Promise<{ canvas: Canvas }>;
+      return res.json();
     },
 
     // Get canvas by ID
@@ -38,7 +38,7 @@ export const api = {
         if (res.status === 404) throw new Error('Canvas not found');
         throw new Error('Failed to get canvas');
       }
-      return res.json() as Promise<GetCanvasResponse>;
+      return res.json();
     },
 
     // Update canvas metadata
@@ -52,7 +52,7 @@ export const api = {
         body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error('Failed to update canvas');
-      return res.json() as Promise<Canvas>;
+      return res.json();
     },
 
     // Update share state (coordinates and zoom for URL sharing)
@@ -66,7 +66,7 @@ export const api = {
         body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error('Failed to update share state');
-      return res.json() as Promise<Canvas>;
+      return res.json();
     },
   },
 
@@ -92,7 +92,7 @@ export const api = {
         `${API_BASE_URL}/canvas/${canvasId}/tiles?${params}`
       );
       if (!res.ok) throw new Error('Failed to get tiles');
-      return res.json() as Promise<{ tiles: TileCoordinate[] }>;
+      return res.json();
     },
 
     // Save tiles
@@ -114,7 +114,7 @@ export const api = {
         body: formData,
       });
       if (!res.ok) throw new Error('Failed to save tiles');
-      return res.json() as Promise<SaveTilesResponse>;
+      return res.json();
     },
 
     // Get tile image URL with optional cache version
@@ -158,12 +158,7 @@ export const api = {
         throw new Error('Failed to upload OGP image');
       }
 
-      return res.json() as Promise<{
-        success: boolean;
-        imageUrl: string;
-        placeName: string;
-        generatedAt: string;
-      }>;
+      return res.json();
     },
 
     // Get OGP metadata
@@ -181,15 +176,7 @@ export const api = {
         if (res.status === 404) throw new Error('OGP metadata not found');
         throw new Error('Failed to get OGP metadata');
       }
-      return res.json() as Promise<{
-        title: string;
-        description: string;
-        imageUrl: string;
-        pageUrl: string;
-        imageWidth: number;
-        imageHeight: number;
-        siteName: string;
-      }>;
+      return res.json();
     },
   },
 };
