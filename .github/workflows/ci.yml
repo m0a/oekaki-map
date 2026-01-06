@@ -94,6 +94,9 @@ jobs:
       - name: Install frontend dependencies
         run: cd frontend && pnpm install --frozen-lockfile
 
+      - name: Install backend dependencies
+        run: cd backend && pnpm install --frozen-lockfile
+
       - name: Build frontend
         run: cd frontend && pnpm build
 

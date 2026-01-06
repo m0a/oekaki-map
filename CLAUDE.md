@@ -117,3 +117,10 @@ D1 migrations run automatically before each deployment.
 ## Specs
 
 Feature specifications are in `specs/` directory. Each feature has `spec.md`, `plan.md`, and optionally `tasks.md`.
+
+## Active Technologies
+- TypeScript 5.6.3 (strict mode) (009-hono-rpc-migration)
+- Cloudflare D1 (SQLite), Cloudflare R2 (object storage) (009-hono-rpc-migration)
+
+## Recent Changes
+- 009-hono-rpc-migration: Added TypeScript 5.6.3 (strict mode)

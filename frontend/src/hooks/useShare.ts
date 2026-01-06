@@ -102,6 +102,8 @@ export function useShare(): UseShareReturn {
             setProgress('プレビューをアップロード中...');
 
             // Upload OGP image
+            // NOTE: Keeps manual fetch for FormData upload (Hono RPC 4.6.0 limitation)
+            // See: specs/009-hono-rpc-migration/spec.md - FormData endpoints
             await api.ogp.upload(canvasId, screenshot, placeName);
           }
         } catch (previewError) {

@@ -1,8 +1,9 @@
 import { useState, useCallback } from 'react';
-import type { Layer } from '../types';
-import { MAX_LAYERS_PER_CANVAS, DEFAULT_LAYER_NAME_PREFIX } from '../types';
+import type { Layer } from '../../../backend/src/types';
+import { MAX_LAYERS_PER_CANVAS } from '../../../backend/src/types';
+import { client, callRpc } from '../services/rpc';
 
-const API_BASE = '/api';
+const DEFAULT_LAYER_NAME_PREFIX = 'レイヤー';
 
 interface UseLayersReturn {
   layers: Layer[];
@@ -34,12 +35,15 @@ export function useLayers(): UseLayersReturn {
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE}/canvas/${canvasId}/layers`);
-      if (!response.ok) {
-        throw new Error('Failed to load layers');
-      }
+      const { data, error} = await callRpc<{ layers: Layer[] }>(
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        client.api.canvas[':canvasId'].layers.$get({
+          param: { canvasId },
+        })
+      );
 
-      const data = await response.json() as { layers: Layer[] };
+      if (error || !data) throw new Error(error || 'No data returned');
+
       const loadedLayers = data.layers;
 
       setLayers(loadedLayers);
@@ -61,17 +65,16 @@ export function useLayers(): UseLayersReturn {
     if (!canCreateLayer) return null;
 
     try {
-      const response = await fetch(`${API_BASE}/canvas/${canvasId}/layers`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-      });
+      const { data, error } = await callRpc<{ layer: Layer }>(
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        client.api.canvas[':canvasId'].layers.$post({
+          param: { canvasId },
+          json: { name },
+        })
+      );
 
-      if (!response.ok) {
-        throw new Error('Failed to create layer');
-      }
+      if (error || !data) throw new Error(error || 'No data returned');
 
-      const data = await response.json() as { layer: Layer };
       const newLayer = data.layer;
 
       setLayers((prev) => [...prev, newLayer].sort((a, b) => a.order - b.order));
@@ -95,17 +98,16 @@ export function useLayers(): UseLayersReturn {
     updates: Partial<Pick<Layer, 'name' | 'order' | 'visible'>>
   ): Promise<Layer | null> => {
     try {
-      const response = await fetch(`${API_BASE}/canvas/${canvasId}/layers/${layerId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      });
+      const { data, error } = await callRpc<{ layer: Layer }>(
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        client.api.canvas[':canvasId'].layers[':id'].$patch({
+          param: { canvasId, id: layerId },
+          json: updates,
+        })
+      );
 
-      if (!response.ok) {
-        throw new Error('Failed to update layer');
-      }
+      if (error || !data) throw new Error(error || 'No data returned');
 
-      const data = await response.json() as { layer: Layer };
       const updatedLayer = data.layer;
 
       setLayers((prev) =>
@@ -128,13 +130,14 @@ export function useLayers(): UseLayersReturn {
     }
 
     try {
-      const response = await fetch(`${API_BASE}/canvas/${canvasId}/layers/${layerId}`, {
-        method: 'DELETE',
-      });
+      const { error } = await callRpc(
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        client.api.canvas[':canvasId'].layers[':id'].$delete({
+          param: { canvasId, id: layerId },
+        })
+      );
 
-      if (!response.ok) {
-        throw new Error('Failed to delete layer');
-      }
+      if (error) throw new Error(error);
 
       const deletedIndex = layers.findIndex((l) => l.id === layerId);
 

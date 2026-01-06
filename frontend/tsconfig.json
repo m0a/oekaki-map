@@ -39,8 +39,9 @@
     },
 
     /* Vite types */
-    "types": ["vite/client"]
+    "types": ["vite/client", "@cloudflare/workers-types"]
   },
   "include": ["src", "tests"],
+  "exclude": ["node_modules", "../backend"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

@@ -3,7 +3,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { MapPosition, DrawingState, StrokeData, TileInfo } from '../../types';
 import { getTileBounds, projectToPixel } from '../../utils/tiles';
-import { api } from '../../services/api';
+import { client, callRpc } from '../../services/rpc';
 import { useTileCache } from '../../hooks/useTileCache';
 import { TILE_DIMENSION } from '../../types';
 
@@ -170,15 +170,26 @@ export function MapWithDrawing({
         const minY = Math.floor(((1 - Math.log(Math.tan(nwLatRad) + 1 / Math.cos(nwLatRad)) / Math.PI) / 2) * n);
         const maxY = Math.floor(((1 - Math.log(Math.tan(seLatRad) + 1 / Math.cos(seLatRad)) / Math.PI) / 2) * n);
 
-        const response = await api.tiles.getForArea(canvasId, tileZoom, minX, maxX, minY, maxY);
+        const { data, error } = await callRpc<{ tiles: TileInfo[] }>(
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+          client.api.canvas[':id'].tiles.$get({
+            param: { id: canvasId },
+            query: {
+              z: String(tileZoom),
+              minX: String(minX),
+              maxX: String(maxX),
+              minY: String(minY),
+              maxY: String(maxY),
+            },
+          })
+        );
 
-        if (response.tiles && response.tiles.length > 0) {
+        if (!error && data && data.tiles && data.tiles.length > 0) {
           // Add tiles to load list with updatedAt for cache versioning
-          for (const tile of response.tiles) {
+          for (const tile of data.tiles) {
             const tileInfo: TileInfo = { z: tile.z, x: tile.x, y: tile.y };
-            const updatedAt = (tile as TileInfo).updatedAt;
-            if (updatedAt) {
-              tileInfo.updatedAt = updatedAt;
+            if (tile.updatedAt) {
+              tileInfo.updatedAt = tile.updatedAt;
             }
             tilesToLoad.push(tileInfo);
           }
