@@ -138,7 +138,91 @@ app.onError((err, c) => {
   );
 });
 
-export default app;
-
 // Export type for RPC client
 export type AppType = typeof app;
+
+// Export default handler with scheduled support (Feature: 010-data-cleanup)
+export default {
+  fetch: app.fetch,
+
+  async scheduled(event: ScheduledEvent, env: Env, _ctx: ExecutionContext) {
+    const startTime = Date.now();
+
+    // Structured logging: cleanup_started
+    console.log(
+      JSON.stringify({
+        event: 'cleanup_started',
+        timestamp: new Date().toISOString(),
+        cron: event.cron,
+        scheduledTime: new Date(event.scheduledTime).toISOString(),
+      })
+    );
+
+    try {
+      const { CleanupService } = await import('./services/cleanup');
+      const cleanupService = new CleanupService();
+
+      const result = await cleanupService.executeCleanup(env);
+
+      const duration_ms = Date.now() - startTime;
+
+      if (result.success) {
+        // Structured logging: cleanup_completed (success)
+        console.log(
+          JSON.stringify({
+            event: 'cleanup_completed',
+            timestamp: new Date().toISOString(),
+            status: 'success',
+            deletion_record_id: result.deletion_record_id,
+            canvases_processed: result.canvases_processed,
+            duration_ms,
+            errors_count: result.errors.length,
+          })
+        );
+      } else {
+        // Structured logging: cleanup_completed (failed)
+        console.error(
+          JSON.stringify({
+            event: 'cleanup_completed',
+            timestamp: new Date().toISOString(),
+            status: 'failed',
+            canvases_processed: result.canvases_processed,
+            duration_ms,
+            errors: result.errors,
+          })
+        );
+      }
+    } catch (error) {
+      const duration_ms = Date.now() - startTime;
+
+      // Dynamic import to check error type
+      const { LockAcquisitionError } = await import('./services/cleanup');
+
+      if (error instanceof LockAcquisitionError) {
+        // Cleanup already running - log warning and exit gracefully
+        console.warn(
+          JSON.stringify({
+            event: 'cleanup_skipped',
+            timestamp: new Date().toISOString(),
+            reason: 'already_locked',
+            locked_by: error.locked_by,
+            locked_at: error.locked_at,
+            duration_ms,
+          })
+        );
+      } else {
+        // Unexpected error - log and re-throw
+        console.error(
+          JSON.stringify({
+            event: 'cleanup_failed',
+            timestamp: new Date().toISOString(),
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+            duration_ms,
+          })
+        );
+        throw error;
+      }
+    }
+  },
+};
