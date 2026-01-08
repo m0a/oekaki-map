@@ -36,6 +36,39 @@ app.get('/api/health', (c) => {
   return c.json({ status: 'ok', service: 'oekaki-map-api' });
 });
 
+// TEST ONLY: Manual cleanup trigger (preview environment only)
+app.get('/api/__test-cleanup', async (c) => {
+  // Only allow in non-production environments
+  if (c.env.ENVIRONMENT === 'production') {
+    return c.json({ error: 'Not available in production' }, 403);
+  }
+
+  try {
+    const { CleanupService } = await import('./services/cleanup');
+    const cleanupService = new CleanupService();
+    const result = await cleanupService.executeCleanup(c.env);
+
+    return c.json({
+      success: result.success,
+      deletion_record_id: result.deletion_record_id,
+      canvases_processed: result.canvases_processed,
+      errors: result.errors,
+    });
+  } catch (error) {
+    const { LockAcquisitionError } = await import('./services/cleanup');
+
+    if (error instanceof LockAcquisitionError) {
+      return c.json({
+        error: 'cleanup_already_running',
+        locked_by: error.locked_by,
+        locked_at: error.locked_at,
+      }, 409);
+    }
+
+    throw error;
+  }
+});
+
 // API routes
 app.route('/api/canvas', canvasRoutes);
 app.route('/api/canvas', tilesRoutes); // /api/canvas/:id/tiles
