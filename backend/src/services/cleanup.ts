@@ -1,4 +1,3 @@
-import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
 import type { Env, CleanupResult, CleanupStats } from '../types/index';
 
 /**

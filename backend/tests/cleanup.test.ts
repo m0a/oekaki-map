@@ -7,7 +7,6 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { CleanupService, LockAcquisitionError } from '../src/services/cleanup';
-import type { D1Database, R2Bucket, R2ListOptions, R2ObjectBody } from '@cloudflare/workers-types';
 
 /**
  * Mock D1 Database for testing
