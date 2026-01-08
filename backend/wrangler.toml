@@ -25,6 +25,10 @@ bucket_name = "oekaki-map-tiles"
 [vars]
 ENVIRONMENT = "production"
 
+# Cron Triggers (Feature: 010-data-cleanup)
+[triggers]
+crons = ["0 2 * * *"]  # Daily at 2:00 AM UTC
+
 # Local development settings
 [dev]
 port = 8787

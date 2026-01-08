@@ -176,3 +176,45 @@ export const OGP_IMAGE_WIDTH = 1200;
 export const OGP_IMAGE_HEIGHT = 630;
 export const OGP_MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 export const OGP_MAX_PLACE_NAME_LENGTH = 100;
+
+// Cleanup types - Feature 010-data-cleanup
+export interface DeletionRecord {
+  id: string;
+  executed_at: string; // ISO 8601
+  canvases_deleted: number;
+  tiles_deleted: number;
+  layers_deleted: number;
+  ogp_images_deleted: number;
+  total_tiles_before: number;
+  total_tiles_after: number;
+  storage_reclaimed_bytes: number;
+  orphaned_tiles_deleted: number;
+  orphaned_ogp_deleted: number;
+  errors_encountered: string | null; // JSON array
+  duration_ms: number | null;
+}
+
+export interface CleanupLock {
+  id: 1;
+  locked_at: string; // ISO 8601
+  locked_by: string;
+}
+
+export interface CleanupResult {
+  success: boolean;
+  deletion_record_id: string | null;
+  canvases_processed: number;
+  errors: string[];
+}
+
+export interface CleanupStats {
+  canvases_deleted: number;
+  tiles_deleted: number;
+  layers_deleted: number;
+  ogp_images_deleted: number;
+  orphaned_tiles_deleted: number;
+  orphaned_ogp_deleted: number;
+  storage_reclaimed_bytes: number;
+  total_tiles_before: number;
+  total_tiles_after: number;
+}
