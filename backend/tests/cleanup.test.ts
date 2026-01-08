@@ -1,3 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { CleanupService, LockAcquisitionError } from '../src/services/cleanup';
 import type { D1Database, R2Bucket, R2ListOptions, R2ObjectBody } from '@cloudflare/workers-types';

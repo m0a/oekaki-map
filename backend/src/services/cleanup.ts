@@ -522,7 +522,7 @@ export class CleanupService {
       // First attempt
       await bucket.delete(key);
       return true;
-    } catch (error) {
+    } catch {
       // Immediate retry on first failure
       try {
         await bucket.delete(key);
