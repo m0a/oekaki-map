@@ -1,5 +1,6 @@
 // Frontend-specific types only
 // Backend types are imported directly from backend/src/types
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import type { TileCoordinate } from '../../../backend/src/types';
 
 // Tile info with version for HTTP caching (frontend extension)
@@ -120,3 +121,24 @@ export interface ReverseGeocodeResult {
 
 // Re-export OGP constants from backend
 export { OGP_IMAGE_WIDTH, OGP_IMAGE_HEIGHT } from '../../../backend/src/types';
+
+// Multi-touch hook types
+export interface UseMultiTouchOptions {
+  /** Callback when multi-touch starts (2+ pointers detected) */
+  onMultiTouchStart?: () => void;
+  /** Callback when multi-touch ends (all pointers released) */
+  onMultiTouchEnd?: () => void;
+}
+
+export interface UseMultiTouchResult {
+  /** Whether multi-touch is currently active (2+ pointers) */
+  isMultiTouch: boolean;
+  /** Current number of active pointers */
+  pointerCount: number;
+  /** Handler for pointerdown events */
+  handlePointerDown: (e: ReactPointerEvent) => void;
+  /** Handler for pointerup events */
+  handlePointerUp: (e: ReactPointerEvent) => void;
+  /** Handler for pointercancel events */
+  handlePointerCancel: (e: ReactPointerEvent) => void;
+}

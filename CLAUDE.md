@@ -121,6 +121,8 @@ Feature specifications are in `specs/` directory. Each feature has `spec.md`, `p
 ## Active Technologies
 - TypeScript 5.6.3 (strict mode) (009-hono-rpc-migration)
 - Cloudflare D1 (SQLite), Cloudflare R2 (object storage) (009-hono-rpc-migration)
+- TypeScript 5.6.3 (strict mode) + React 18.3, Leaflet 1.9.4, Vite 6.0 (011-multi-touch-auto-drag)
+- N/A（この機能はフロントエンドUIのみ） (011-multi-touch-auto-drag)
 
 ## Recent Changes
 - 009-hono-rpc-migration: Added TypeScript 5.6.3 (strict mode)
