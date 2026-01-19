@@ -767,12 +767,18 @@ export function MapWithDrawing({
             return;
           }
 
-          // Ensure canvas is visible before drawing
-          if (canvasRef.current && canvasRef.current.style.opacity !== '1') {
-            canvasRef.current.style.opacity = '1';
-            canvasRef.current.style.transform = '';
-            canvasRef.current.style.transformOrigin = '';
-            void logDebug('globalTouchStart_FORCE_SHOW_CANVAS', { version: BUILD_VERSION });
+          // Ensure canvas is visible and properly positioned before drawing
+          if (canvasRef.current) {
+            const needsReset = canvasRef.current.style.opacity !== '1' || canvasRef.current.style.transform !== '';
+            if (needsReset) {
+              canvasRef.current.style.opacity = '1';
+              canvasRef.current.style.transform = '';
+              canvasRef.current.style.transformOrigin = '';
+              void logDebug('globalTouchStart_FORCE_RESET_CANVAS', {
+                version: BUILD_VERSION,
+                reason: canvasRef.current.style.opacity !== '1' ? 'opacity' : 'transform',
+              });
+            }
           }
 
           void logDebug('globalTouchStart_DRAW_START', {
@@ -832,12 +838,18 @@ export function MapWithDrawing({
         if (touch && isDrawableZoom) {
           const point = getTouchPoint(touch);
           if (point) {
-            // Ensure canvas is visible before drawing
-            if (canvasRef.current && canvasRef.current.style.opacity !== '1') {
-              canvasRef.current.style.opacity = '1';
-              canvasRef.current.style.transform = '';
-              canvasRef.current.style.transformOrigin = '';
-              void logDebug('globalTouchMove_FORCE_SHOW_CANVAS', { version: BUILD_VERSION });
+            // Ensure canvas is visible and properly positioned before drawing
+            if (canvasRef.current) {
+              const needsReset = canvasRef.current.style.opacity !== '1' || canvasRef.current.style.transform !== '';
+              if (needsReset) {
+                canvasRef.current.style.opacity = '1';
+                canvasRef.current.style.transform = '';
+                canvasRef.current.style.transformOrigin = '';
+                void logDebug('globalTouchMove_FORCE_RESET_CANVAS', {
+                  version: BUILD_VERSION,
+                  reason: canvasRef.current.style.opacity !== '1' ? 'opacity' : 'transform',
+                });
+              }
             }
 
             void logDebug('globalTouchMove_IMMEDIATE_START', {
