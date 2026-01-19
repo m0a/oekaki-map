@@ -1285,6 +1285,38 @@ export function MapWithDrawing({
     };
   }, [drawingState.mode, canvasId, reloadTilesForCurrentView, strokes, visibleLayerIds, redrawStrokes]);
 
+  // Reset canvas transform after map move in draw mode (pan during pinch-zoom)
+  useEffect(() => {
+    if (!mapRef.current || drawingState.mode === 'navigate' || !canvasId) return;
+
+    const handleMoveEndDraw = () => {
+      void (async () => {
+        // Flush pending saves first
+        if (onFlushSave) {
+          await onFlushSave();
+        }
+        // Reload tiles and redraw to ensure content is at correct position
+        await reloadTilesForCurrentView();
+        if (strokes !== undefined) {
+          redrawStrokes(strokes, visibleLayerIds);
+        }
+        // Reset transform and show canvas
+        if (canvasRef.current) {
+          canvasRef.current.style.transform = '';
+          canvasRef.current.style.transformOrigin = '';
+          canvasRef.current.style.opacity = '1';
+        }
+      })();
+    };
+
+    const map = mapRef.current;
+    map.on('moveend', handleMoveEndDraw);
+
+    return () => {
+      map.off('moveend', handleMoveEndDraw);
+    };
+  }, [drawingState.mode, canvasId, reloadTilesForCurrentView, strokes, visibleLayerIds, redrawStrokes, onFlushSave]);
+
   const cursor = drawingState.mode === 'navigate' ? 'grab' : !isDrawableZoom ? 'not-allowed' : drawingState.mode === 'draw' ? 'crosshair' : 'cell';
   // Use 'pinch-zoom' in draw mode:
   // - Allows two-finger pinch zoom (browser native)
