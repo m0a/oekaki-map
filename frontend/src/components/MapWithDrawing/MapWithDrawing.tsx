@@ -6,6 +6,10 @@ import { getTileBounds, projectToPixel } from '../../utils/tiles';
 import { client, callRpc } from '../../services/rpc';
 import { useTileCache } from '../../hooks/useTileCache';
 import { TILE_DIMENSION } from '../../types';
+import { logDebug } from '../../lib/errorLogger';
+
+// Version for debugging
+const BUILD_VERSION = '2026-01-19-v16';
 
 interface MapWithDrawingProps {
   position?: MapPosition;
@@ -52,6 +56,7 @@ export function MapWithDrawing({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
 
   // Tile cache hook
   const { loadTiles, getCachedTiles, clearCache } = useTileCache();
@@ -64,6 +69,20 @@ export function MapWithDrawing({
   // Drawing state
   const isDrawingRef = useRef(false);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
+
+  // Multi-touch state for detecting pinch/zoom gestures
+  const [isMultiTouch, setIsMultiTouch] = useState(false);
+  const activePointersRef = useRef<Set<number>>(new Set());
+  const wasMultiTouchRef = useRef(false);
+
+  // Delayed draw start to detect multi-touch
+  const drawStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingPointerRef = useRef<{ pointerId: number; clientX: number; clientY: number } | null>(null);
+  const DRAW_START_DELAY = 80; // ms to wait before starting draw
+
+  // Track last touch time to ignore synthetic mouse events
+  const lastTouchTimeRef = useRef<number>(0);
+  const SYNTHETIC_MOUSE_THRESHOLD = 500; // ms - ignore mouse events within this time after touch
 
   // Current stroke points for undo/redo (stored as geographic coordinates)
   const currentStrokePointsRef = useRef<Array<{ lat: number; lng: number }>>([]);
@@ -210,28 +229,49 @@ export function MapWithDrawing({
     }
   }, [canvasId, onFlushSave, clearCache, loadTiles]);
 
-  // Handle pointer down
-  const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    if (drawingState.mode === 'navigate') return;
-    if (!isDrawableZoom) return;
+  // Cancel pending draw start
+  const cancelPendingDraw = useCallback(() => {
+    if (drawStartTimerRef.current || pendingPointerRef.current) {
+      void logDebug('cancelPendingDraw', {
+        version: BUILD_VERSION,
+        hadTimer: !!drawStartTimerRef.current,
+        hadPendingPointer: !!pendingPointerRef.current,
+      });
+    }
+    if (drawStartTimerRef.current) {
+      clearTimeout(drawStartTimerRef.current);
+      drawStartTimerRef.current = null;
+    }
+    pendingPointerRef.current = null;
+  }, []);
 
-    e.preventDefault();
-    e.stopPropagation();
+  // Start drawing after delay (called from timer)
+  const startDrawingDelayed = useCallback(() => {
+    void logDebug('startDrawingDelayed_ENTRY', {
+      hasPendingPointer: !!pendingPointerRef.current,
+      wasMultiTouch: wasMultiTouchRef.current,
+    });
 
+    if (!pendingPointerRef.current) return;
+    if (wasMultiTouchRef.current) return;
+
+    const { clientX, clientY } = pendingPointerRef.current;
+    pendingPointerRef.current = null;
+    drawStartTimerRef.current = null;
+
+    void logDebug('startDrawingDelayed_START', { clientX, clientY });
     isDrawingRef.current = true;
     currentStrokePointsRef.current = [];
 
-    const point = screenToCanvas(e.clientX, e.clientY);
+    const point = screenToCanvas(clientX, clientY);
     if (point) {
       lastPointRef.current = point;
 
-      // Store geographic coordinates for undo/redo
       const latLng = canvasToLatLng(point);
       if (latLng) {
         currentStrokePointsRef.current.push(latLng);
       }
 
-      // Draw a dot
       const ctx = getContext();
       if (ctx) {
         ctx.beginPath();
@@ -245,7 +285,141 @@ export function MapWithDrawing({
         ctx.fill();
       }
     }
-  }, [drawingState, screenToCanvas, canvasToLatLng, getContext, isDrawableZoom, currentZoom]);
+  }, [screenToCanvas, canvasToLatLng, getContext, drawingState.thickness, drawingState.color, drawingState.mode]);
+
+  // Switch to multi-touch mode (cancel drawing, let Leaflet handle gestures)
+  const enterMultiTouchMode = useCallback(() => {
+    if (wasMultiTouchRef.current) return;
+
+    void logDebug('enterMultiTouchMode', { version: BUILD_VERSION });
+    wasMultiTouchRef.current = true;
+    cancelPendingDraw();
+
+    // Set React state (for UI updates if needed)
+    setIsMultiTouch(true);
+
+    // End current stroke if drawing - SAVE IT FIRST!
+    if (isDrawingRef.current) {
+      // Cancel any pending animation frame
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+
+      isDrawingRef.current = false;
+      lastPointRef.current = null;
+
+      // Save the stroke before clearing!
+      if (canvasRef.current && mapRef.current && onStrokeEnd && currentStrokePointsRef.current.length > 0) {
+        const map = mapRef.current;
+        const bounds = map.getBounds();
+        const zoom = map.getZoom();
+
+        const strokeData: StrokeData = {
+          id: crypto.randomUUID(),
+          layerId: activeLayerId || 'default',
+          points: [...currentStrokePointsRef.current],
+          color: drawingState.color,
+          thickness: drawingState.thickness,
+          mode: drawingState.mode === 'erase' ? 'erase' : 'draw',
+          timestamp: Date.now(),
+          zoom: zoom,
+        };
+
+        void logDebug('enterMultiTouchMode_SAVE_STROKE', {
+          version: BUILD_VERSION,
+          pointCount: strokeData.points.length,
+        });
+
+        onStrokeEnd(canvasRef.current, bounds, zoom, strokeData);
+      }
+
+      currentStrokePointsRef.current = [];
+    }
+
+    // Note: Leaflet's touchZoom is always enabled in draw mode now,
+    // so no need to enable it here. Overlay has pointerEvents: 'none'
+    // so Leaflet receives touch events directly.
+  }, [cancelPendingDraw, onStrokeEnd, activeLayerId, drawingState.color, drawingState.thickness, drawingState.mode]);
+
+  // Handle pointer down
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    void logDebug('pointerDown_ENTRY', {
+      version: BUILD_VERSION,
+      pointerId: e.pointerId,
+      pointerType: e.pointerType,
+      mode: drawingState.mode,
+      wasMultiTouch: wasMultiTouchRef.current,
+      isMultiTouch,
+    });
+
+    // Track active pointers for multi-touch detection
+    const previousSize = activePointersRef.current.size;
+    activePointersRef.current.add(e.pointerId);
+    const newSize = activePointersRef.current.size;
+
+    void logDebug('pointerDown', {
+      pointerId: e.pointerId,
+      pointerType: e.pointerType,
+      previousSize,
+      newSize,
+      mode: drawingState.mode,
+    });
+
+    // Detect multi-touch (2+ pointers) via pointer events
+    if (newSize >= 2) {
+      enterMultiTouchMode();
+      return;
+    }
+
+    // If in multi-touch mode, don't start drawing
+    if (wasMultiTouchRef.current) {
+      return;
+    }
+
+    if (drawingState.mode === 'navigate') return;
+    if (!isDrawableZoom) return;
+
+    // For touch input, let the global touch handler manage drawing
+    // This avoids conflicts between overlay pointer events and global touch events
+    if (e.pointerType === 'touch') {
+      void logDebug('pointerDown_SKIP_TOUCH', {
+        version: BUILD_VERSION,
+        reason: 'Handled by global touch handler',
+      });
+      return;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    // For mouse/pen, start drawing immediately
+    isDrawingRef.current = true;
+    currentStrokePointsRef.current = [];
+
+    const point = screenToCanvas(e.clientX, e.clientY);
+    if (point) {
+      lastPointRef.current = point;
+
+      const latLng = canvasToLatLng(point);
+      if (latLng) {
+        currentStrokePointsRef.current.push(latLng);
+      }
+
+      const ctx = getContext();
+      if (ctx) {
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, drawingState.thickness / 2, 0, Math.PI * 2);
+        ctx.fillStyle = drawingState.mode === 'erase' ? 'rgba(0,0,0,1)' : drawingState.color;
+        if (drawingState.mode === 'erase') {
+          ctx.globalCompositeOperation = 'destination-out';
+        } else {
+          ctx.globalCompositeOperation = 'source-over';
+        }
+        ctx.fill();
+      }
+    }
+  }, [drawingState, screenToCanvas, canvasToLatLng, getContext, isDrawableZoom, enterMultiTouchMode, cancelPendingDraw, startDrawingDelayed, DRAW_START_DELAY]);
 
   // Handle pointer move
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
@@ -284,7 +458,27 @@ export function MapWithDrawing({
   }, [drawingState.mode, screenToCanvas, canvasToLatLng, drawLine, isDrawableZoom]);
 
   // Handle pointer up
-  const handlePointerUp = useCallback(() => {
+  const handlePointerUp = useCallback((e: React.PointerEvent) => {
+    // Track active pointers
+    activePointersRef.current.delete(e.pointerId);
+    const remainingPointers = activePointersRef.current.size;
+
+    void logDebug('pointerUp', {
+      pointerId: e.pointerId,
+      remainingPointers,
+      wasMultiTouch: wasMultiTouchRef.current,
+    });
+
+    // If all pointers released and was in multi-touch mode, reset
+    if (remainingPointers === 0 && wasMultiTouchRef.current) {
+      void logDebug('multiTouchEnd', { version: BUILD_VERSION });
+      wasMultiTouchRef.current = false;
+      setIsMultiTouch(false);
+      // No need to restore pointerEvents - overlay always has 'none'
+      // No need to disable touchZoom - it stays enabled for next gesture
+      return;
+    }
+
     if (!isDrawingRef.current) return;
 
     // Cancel any pending RAF
@@ -463,6 +657,8 @@ export function MapWithDrawing({
   }, []);
 
   // Update map interactivity based on drawing mode
+  // In draw/erase mode, keep touchZoom enabled so pinch gestures work
+  // Drawing is cancelled when multi-touch is detected
   useEffect(() => {
     if (!mapRef.current) return;
 
@@ -474,13 +670,402 @@ export function MapWithDrawing({
       map.scrollWheelZoom.enable();
       map.doubleClickZoom.enable();
     } else {
+      // Keep touchZoom enabled for pinch gestures even in draw mode
+      // Single-touch drawing is handled by global touch listeners
+      // Multi-touch is detected and drawing is cancelled
       map.dragging.disable();
-      map.touchZoom.disable();
+      map.touchZoom.enable(); // Keep enabled for pinch zoom
       map.scrollWheelZoom.disable();
       map.doubleClickZoom.disable();
     }
   }, [drawingState.mode]);
 
+  // Global touch event listeners for multi-touch detection AND drawing
+  // This handles drawing directly from global touch events because overlay's events
+  // may not work correctly after multi-touch due to browser event routing timing
+  useEffect(() => {
+    if (drawingState.mode === 'navigate') return;
+
+    // Helper to get point from touch
+    const getTouchPoint = (touch: Touch): { x: number; y: number } | null => {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return null;
+      return {
+        x: touch.clientX - rect.left,
+        y: touch.clientY - rect.top,
+      };
+    };
+
+    // Helper to convert point to LatLng
+    const pointToLatLng = (point: { x: number; y: number }): { lat: number; lng: number } | null => {
+      if (!mapRef.current) return null;
+      const latLng = mapRef.current.containerPointToLatLng([point.x, point.y]);
+      return { lat: latLng.lat, lng: latLng.lng };
+    };
+
+    const handleGlobalTouchStart = (e: TouchEvent) => {
+      // Track touch time to ignore synthetic mouse events
+      lastTouchTimeRef.current = Date.now();
+
+      void logDebug('globalTouchStart', {
+        version: BUILD_VERSION,
+        touchCount: e.touches.length,
+        mode: drawingState.mode,
+        wasMultiTouch: wasMultiTouchRef.current,
+        isDrawing: isDrawingRef.current,
+      });
+
+      // Detect multi-touch immediately
+      if (e.touches.length >= 2) {
+        enterMultiTouchMode();
+        return;
+      }
+
+      // Single touch after multi-touch ended - start drawing via global handler
+      // This bypasses overlay's pointer events which may not work correctly
+      if (e.touches.length === 1 && !wasMultiTouchRef.current && !isDrawingRef.current) {
+        if (!isDrawableZoom) {
+          void logDebug('globalTouchStart_NOT_DRAWABLE_ZOOM', {
+            version: BUILD_VERSION,
+            isDrawableZoom,
+          });
+          return;
+        }
+
+        const touch = e.touches[0];
+        if (!touch) return;
+
+        void logDebug('globalTouchStart_SCHEDULING_DRAW', {
+          version: BUILD_VERSION,
+          clientX: touch.clientX,
+          clientY: touch.clientY,
+        });
+
+        // Schedule drawing start after delay (to detect potential multi-touch)
+        cancelPendingDraw();
+        pendingPointerRef.current = {
+          pointerId: -1,
+          clientX: touch.clientX,
+          clientY: touch.clientY,
+        };
+
+        drawStartTimerRef.current = setTimeout(() => {
+          void logDebug('globalTouchStart_TIMEOUT_FIRED', {
+            version: BUILD_VERSION,
+            hasPendingPointer: !!pendingPointerRef.current,
+            wasMultiTouch: wasMultiTouchRef.current,
+          });
+
+          if (!pendingPointerRef.current || wasMultiTouchRef.current) {
+            void logDebug('globalTouchStart_TIMEOUT_CANCELLED', {
+              version: BUILD_VERSION,
+              hasPendingPointer: !!pendingPointerRef.current,
+              wasMultiTouch: wasMultiTouchRef.current,
+            });
+            pendingPointerRef.current = null;
+            drawStartTimerRef.current = null;
+            return;
+          }
+
+          // Ensure canvas is visible before drawing
+          if (canvasRef.current && canvasRef.current.style.opacity !== '1') {
+            canvasRef.current.style.opacity = '1';
+            canvasRef.current.style.transform = '';
+            canvasRef.current.style.transformOrigin = '';
+            void logDebug('globalTouchStart_FORCE_SHOW_CANVAS', { version: BUILD_VERSION });
+          }
+
+          void logDebug('globalTouchStart_DRAW_START', {
+            version: BUILD_VERSION,
+            canvasOpacity: canvasRef.current?.style.opacity,
+            canvasTransform: canvasRef.current?.style.transform,
+            canvasWidth: canvasRef.current?.width,
+            canvasHeight: canvasRef.current?.height,
+          });
+
+          const point = getTouchPoint({ clientX: pendingPointerRef.current.clientX, clientY: pendingPointerRef.current.clientY } as Touch);
+          if (point) {
+            isDrawingRef.current = true;
+            currentStrokePointsRef.current = [];
+            lastPointRef.current = point;
+
+            const latLng = pointToLatLng(point);
+            if (latLng) {
+              currentStrokePointsRef.current.push(latLng);
+            }
+
+            // Draw initial dot
+            const ctx = getContext();
+            if (ctx) {
+              ctx.beginPath();
+              ctx.arc(point.x, point.y, drawingState.thickness / 2, 0, Math.PI * 2);
+              ctx.fillStyle = drawingState.mode === 'erase' ? 'rgba(0,0,0,1)' : drawingState.color;
+              if (drawingState.mode === 'erase') {
+                ctx.globalCompositeOperation = 'destination-out';
+              } else {
+                ctx.globalCompositeOperation = 'source-over';
+              }
+              ctx.fill();
+            }
+          }
+
+          pendingPointerRef.current = null;
+          drawStartTimerRef.current = null;
+        }, DRAW_START_DELAY);
+      }
+    };
+
+    const handleGlobalTouchMove = (e: TouchEvent) => {
+      // iOS may add second finger during touchmove, not touchstart
+      if (e.touches.length >= 2) {
+        if (!wasMultiTouchRef.current) {
+          void logDebug('multiTouchInMove', { touchCount: e.touches.length });
+          enterMultiTouchMode();
+        }
+        return;
+      }
+
+      // If pending draw and moving, start drawing immediately
+      if (!isDrawingRef.current && pendingPointerRef.current && e.touches.length === 1) {
+        cancelPendingDraw();
+        const touch = e.touches[0];
+        if (touch && isDrawableZoom) {
+          const point = getTouchPoint(touch);
+          if (point) {
+            // Ensure canvas is visible before drawing
+            if (canvasRef.current && canvasRef.current.style.opacity !== '1') {
+              canvasRef.current.style.opacity = '1';
+              canvasRef.current.style.transform = '';
+              canvasRef.current.style.transformOrigin = '';
+              void logDebug('globalTouchMove_FORCE_SHOW_CANVAS', { version: BUILD_VERSION });
+            }
+
+            void logDebug('globalTouchMove_IMMEDIATE_START', {
+              version: BUILD_VERSION,
+              canvasOpacity: canvasRef.current?.style.opacity,
+              canvasTransform: canvasRef.current?.style.transform,
+            });
+            isDrawingRef.current = true;
+            currentStrokePointsRef.current = [];
+            lastPointRef.current = point;
+
+            const latLng = pointToLatLng(point);
+            if (latLng) {
+              currentStrokePointsRef.current.push(latLng);
+            }
+          }
+        }
+      }
+
+      // Continue drawing
+      if (isDrawingRef.current && e.touches.length === 1) {
+        const touch = e.touches[0];
+        if (!touch) return;
+
+        const point = getTouchPoint(touch);
+        if (point && lastPointRef.current) {
+          drawLine(lastPointRef.current, point);
+          lastPointRef.current = point;
+
+          const latLng = pointToLatLng(point);
+          if (latLng) {
+            currentStrokePointsRef.current.push(latLng);
+          }
+
+          // Prevent scrolling while drawing
+          e.preventDefault();
+        }
+      }
+    };
+
+    const handleGlobalTouchEnd = (e: TouchEvent) => {
+      void logDebug('globalTouchEnd', {
+        version: BUILD_VERSION,
+        remainingTouches: e.touches.length,
+        wasMultiTouch: wasMultiTouchRef.current,
+        isDrawing: isDrawingRef.current,
+      });
+
+      cancelPendingDraw();
+
+      // When all fingers are lifted
+      if (e.touches.length === 0) {
+        // Reset multi-touch state
+        if (wasMultiTouchRef.current) {
+          wasMultiTouchRef.current = false;
+          activePointersRef.current.clear();
+          setIsMultiTouch(false);
+          // No need to restore pointerEvents - overlay always has 'none'
+          // No need to disable touchZoom - it stays enabled for next gesture
+          void logDebug('multiTouchCleared', { version: BUILD_VERSION, mode: drawingState.mode });
+        }
+
+        // End stroke if drawing
+        if (isDrawingRef.current) {
+          if (rafIdRef.current !== null) {
+            cancelAnimationFrame(rafIdRef.current);
+            rafIdRef.current = null;
+          }
+
+          isDrawingRef.current = false;
+          lastPointRef.current = null;
+
+          // Notify about stroke end
+          if (canvasRef.current && mapRef.current && onStrokeEnd) {
+            const map = mapRef.current;
+            const bounds = map.getBounds();
+            const zoom = map.getZoom();
+
+            const strokeData: StrokeData = {
+              id: crypto.randomUUID(),
+              layerId: activeLayerId || 'default',
+              points: [...currentStrokePointsRef.current],
+              color: drawingState.color,
+              thickness: drawingState.thickness,
+              mode: drawingState.mode === 'erase' ? 'erase' : 'draw',
+              timestamp: Date.now(),
+              zoom: zoom,
+            };
+
+            onStrokeEnd(canvasRef.current, bounds, zoom, strokeData);
+          }
+
+          currentStrokePointsRef.current = [];
+        }
+      }
+    };
+
+    // Listen for touch events on document (captures before overlay)
+    // Use passive: false for touchmove to allow preventDefault
+    document.addEventListener('touchstart', handleGlobalTouchStart, { passive: true });
+    document.addEventListener('touchmove', handleGlobalTouchMove, { passive: false });
+    document.addEventListener('touchend', handleGlobalTouchEnd, { passive: true });
+    document.addEventListener('touchcancel', handleGlobalTouchEnd, { passive: true });
+
+    return () => {
+      document.removeEventListener('touchstart', handleGlobalTouchStart);
+      document.removeEventListener('touchmove', handleGlobalTouchMove);
+      document.removeEventListener('touchend', handleGlobalTouchEnd);
+      document.removeEventListener('touchcancel', handleGlobalTouchEnd);
+    };
+  }, [drawingState.mode, drawingState.color, drawingState.thickness, isDrawableZoom, enterMultiTouchMode, cancelPendingDraw, getContext, drawLine, onStrokeEnd, activeLayerId, DRAW_START_DELAY]);
+
+  // Global mouse event listeners for desktop drawing
+  // Since overlay has pointerEvents: 'none', mouse events are handled globally
+  useEffect(() => {
+    if (drawingState.mode === 'navigate') return;
+
+    const handleMouseDown = (e: MouseEvent) => {
+      // Only handle left click
+      if (e.button !== 0) return;
+      if (!isDrawableZoom) return;
+
+      // Ignore synthetic mouse events generated after touch
+      const timeSinceLastTouch = Date.now() - lastTouchTimeRef.current;
+      if (timeSinceLastTouch < SYNTHETIC_MOUSE_THRESHOLD) {
+        void logDebug('globalMouseDown_IGNORED_SYNTHETIC', {
+          version: BUILD_VERSION,
+          timeSinceLastTouch,
+        });
+        return;
+      }
+
+      // Check if click is within the map container
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      if (e.clientX < rect.left || e.clientX > rect.right ||
+          e.clientY < rect.top || e.clientY > rect.bottom) {
+        return;
+      }
+
+      void logDebug('globalMouseDown', {
+        version: BUILD_VERSION,
+        clientX: e.clientX,
+        clientY: e.clientY,
+      });
+
+      isDrawingRef.current = true;
+      currentStrokePointsRef.current = [];
+
+      const point = screenToCanvas(e.clientX, e.clientY);
+      if (point) {
+        lastPointRef.current = point;
+
+        const latLng = canvasToLatLng(point);
+        if (latLng) {
+          currentStrokePointsRef.current.push(latLng);
+        }
+
+        // Draw initial dot
+        const ctx = getContext();
+        if (ctx) {
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, drawingState.thickness / 2, 0, Math.PI * 2);
+          ctx.fillStyle = drawingState.mode === 'erase' ? 'rgba(0,0,0,1)' : drawingState.color;
+          if (drawingState.mode === 'erase') {
+            ctx.globalCompositeOperation = 'destination-out';
+          } else {
+            ctx.globalCompositeOperation = 'source-over';
+          }
+          ctx.fill();
+        }
+      }
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDrawingRef.current) return;
+
+      const point = screenToCanvas(e.clientX, e.clientY);
+      if (point && lastPointRef.current) {
+        drawLine(lastPointRef.current, point);
+        lastPointRef.current = point;
+
+        const latLng = canvasToLatLng(point);
+        if (latLng) {
+          currentStrokePointsRef.current.push(latLng);
+        }
+      }
+    };
+
+    const handleMouseUp = () => {
+      if (!isDrawingRef.current) return;
+
+      isDrawingRef.current = false;
+      lastPointRef.current = null;
+
+      // Notify about stroke end
+      if (canvasRef.current && mapRef.current && onStrokeEnd) {
+        const map = mapRef.current;
+        const bounds = map.getBounds();
+        const zoom = map.getZoom();
+
+        const strokeData: StrokeData = {
+          id: crypto.randomUUID(),
+          layerId: activeLayerId || 'default',
+          points: [...currentStrokePointsRef.current],
+          color: drawingState.color,
+          thickness: drawingState.thickness,
+          mode: drawingState.mode === 'erase' ? 'erase' : 'draw',
+          timestamp: Date.now(),
+          zoom: zoom,
+        };
+
+        onStrokeEnd(canvasRef.current, bounds, zoom, strokeData);
+      }
+
+      currentStrokePointsRef.current = [];
+    };
+
+    document.addEventListener('mousedown', handleMouseDown);
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [drawingState.mode, drawingState.color, drawingState.thickness, isDrawableZoom, screenToCanvas, canvasToLatLng, getContext, drawLine, onStrokeEnd, activeLayerId]);
 
   // Update position from props
   useEffect(() => {
@@ -689,7 +1274,31 @@ export function MapWithDrawing({
   }, [drawingState.mode, canvasId, reloadTilesForCurrentView, strokes, visibleLayerIds, redrawStrokes]);
 
   const cursor = drawingState.mode === 'navigate' ? 'grab' : !isDrawableZoom ? 'not-allowed' : drawingState.mode === 'draw' ? 'crosshair' : 'cell';
-  const pointerEvents = drawingState.mode === 'navigate' ? 'none' : 'auto';
+  // Use 'pinch-zoom' in draw mode:
+  // - Allows two-finger pinch zoom (browser native)
+  // - Blocks single-finger pan (so drawing works)
+  // - Blocks double-tap zoom
+  const touchAction = drawingState.mode === 'navigate' ? 'auto' : 'pinch-zoom';
+
+  // Overlay always has pointerEvents: 'none' to let Leaflet receive touch events
+  // Drawing is handled via global touch event listeners on document
+  // This ensures Leaflet can track gestures from the start (pinch/zoom, pan)
+  useEffect(() => {
+    if (!overlayRef.current) return;
+
+    // Always 'none' - we handle drawing via global touch listeners
+    overlayRef.current.style.pointerEvents = 'none';
+
+    // touchAction: 'pinch-zoom' allows pinch-zoom but blocks single-finger pan
+    const newTouchAction = drawingState.mode === 'navigate' ? 'auto' : 'pinch-zoom';
+    overlayRef.current.style.touchAction = newTouchAction;
+
+    void logDebug('touchAction_EFFECT', {
+      version: BUILD_VERSION,
+      mode: drawingState.mode,
+      touchAction: newTouchAction,
+    });
+  }, [drawingState.mode]);
 
   return (
     <>
@@ -708,17 +1317,20 @@ export function MapWithDrawing({
           left: 0,
         }}
       />
-      {/* Transparent overlay for capturing pointer events */}
+      {/* Transparent overlay for capturing pointer events (mouse/pen) */}
+      {/* NOTE: pointerEvents is managed via useEffect to avoid React re-render issues */}
+      {/* Touch events are handled globally on document for reliability after multi-touch */}
       <div
+        ref={overlayRef}
         style={{
           position: 'absolute',
           top: 0,
           left: 0,
           width: '100%',
           height: '100%',
-          pointerEvents,
+          pointerEvents: 'auto', // Initial value, managed by useEffect
           cursor,
-          touchAction: 'none',
+          touchAction,
           zIndex: 500,
         }}
         onPointerDown={handlePointerDown}

@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react';
 import type { Point, DrawingState } from '../../types';
+import { logDebug } from '../../lib/errorLogger';
 
 interface DrawingCanvasProps {
   width: number;
@@ -11,6 +12,17 @@ interface DrawingCanvasProps {
   onDirtyTiles?: (tiles: Set<string>) => void;
 }
 
+/**
+ * DrawingCanvas - Handles drawing on a canvas overlay
+ *
+ * Key design: Canvas always has pointerEvents: 'none' so Leaflet receives
+ * all touch events. We listen to global touch events and only draw when
+ * there's exactly 1 finger touching (single-touch drawing mode).
+ *
+ * This allows:
+ * - Single touch: Drawing works (we track the touch position and draw)
+ * - Multi-touch: Leaflet handles gestures (pinch zoom, pan)
+ */
 export function DrawingCanvas({
   width,
   height,
@@ -24,6 +36,11 @@ export function DrawingCanvas({
   const isDrawingRef = useRef(false);
   const lastPointRef = useRef<Point | null>(null);
   const dirtyTilesRef = useRef<Set<string>>(new Set());
+  const drawStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingStartPointRef = useRef<Point | null>(null);
+
+  // Delay before starting to draw (ms) - allows time to detect multi-touch
+  const DRAW_START_DELAY = 50;
 
   // Get canvas context
   const getContext = useCallback(() => {
@@ -32,36 +49,32 @@ export function DrawingCanvas({
     return canvas.getContext('2d');
   }, []);
 
-  // Get point from event
-  const getPoint = useCallback(
-    (e: MouseEvent | TouchEvent): Point | null => {
-      const canvas = canvasRef.current;
-      if (!canvas) return null;
+  // Get point from touch event relative to canvas
+  const getPointFromTouch = useCallback((touch: Touch): Point | null => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
 
-      const rect = canvas.getBoundingClientRect();
-      let clientX: number;
-      let clientY: number;
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: touch.clientX - rect.left,
+      y: touch.clientY - rect.top,
+    };
+  }, []);
 
-      if ('touches' in e) {
-        if (e.touches.length === 0) return null;
-        clientX = e.touches[0]?.clientX ?? 0;
-        clientY = e.touches[0]?.clientY ?? 0;
-      } else {
-        clientX = e.clientX;
-        clientY = e.clientY;
-      }
+  // Get point from mouse event relative to canvas
+  const getPointFromMouse = useCallback((e: MouseEvent): Point | null => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
 
-      return {
-        x: clientX - rect.left,
-        y: clientY - rect.top,
-      };
-    },
-    []
-  );
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    };
+  }, []);
 
   // Mark tile as dirty
   const markDirtyTile = useCallback((x: number, y: number) => {
-    // Calculate tile coordinates (256x256 tiles)
     const tileX = Math.floor(x / 256);
     const tileY = Math.floor(y / 256);
     const key = `${tileX},${tileY}`;
@@ -90,60 +103,23 @@ export function DrawingCanvas({
 
       ctx.stroke();
 
-      // Mark affected tiles as dirty
       markDirtyTile(from.x, from.y);
       markDirtyTile(to.x, to.y);
     },
     [getContext, color, thickness, mode, markDirtyTile]
   );
 
-  // Handle pointer down
-  const handlePointerDown = useCallback(
-    (e: React.PointerEvent) => {
-      if (mode === 'navigate') return;
-
-      e.preventDefault();
-      isDrawingRef.current = true;
-      dirtyTilesRef.current.clear();
-
-      const point = getPoint(e.nativeEvent);
-      if (point) {
-        lastPointRef.current = point;
-        markDirtyTile(point.x, point.y);
-      }
-    },
-    [mode, getPoint, markDirtyTile]
-  );
-
-  // Handle pointer move
-  const handlePointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      if (!isDrawingRef.current || mode === 'navigate') return;
-
-      e.preventDefault();
-      const point = getPoint(e.nativeEvent);
-
-      if (point && lastPointRef.current) {
-        drawLine(lastPointRef.current, point);
-        lastPointRef.current = point;
-      }
-    },
-    [mode, getPoint, drawLine]
-  );
-
-  // Handle pointer up
-  const handlePointerUp = useCallback(() => {
+  // End stroke and notify
+  const endStroke = useCallback(() => {
     if (!isDrawingRef.current) return;
 
     isDrawingRef.current = false;
     lastPointRef.current = null;
 
-    // Notify about dirty tiles
     if (dirtyTilesRef.current.size > 0) {
       onDirtyTiles?.(new Set(dirtyTilesRef.current));
     }
 
-    // Get image data for stroke
     const ctx = getContext();
     if (ctx && onStrokeComplete) {
       const imageData = ctx.getImageData(0, 0, width, height);
@@ -151,13 +127,171 @@ export function DrawingCanvas({
     }
   }, [getContext, width, height, onStrokeComplete, onDirtyTiles]);
 
-  // Expose clear function via ref would be here if needed
-  // const clear = useCallback(() => {
-  //   const ctx = getContext();
-  //   if (ctx) {
-  //     ctx.clearRect(0, 0, width, height);
-  //   }
-  // }, [getContext, width, height]);
+  // Cancel pending draw start
+  const cancelPendingDraw = useCallback(() => {
+    if (drawStartTimerRef.current) {
+      clearTimeout(drawStartTimerRef.current);
+      drawStartTimerRef.current = null;
+    }
+    pendingStartPointRef.current = null;
+  }, []);
+
+  // Global touch event handlers
+  useEffect(() => {
+    if (mode === 'navigate') return;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      void logDebug('touchStart', {
+        touchCount: e.touches.length,
+        mode,
+      });
+
+      // Multi-touch detected - cancel any pending draw and don't interfere
+      if (e.touches.length >= 2) {
+        cancelPendingDraw();
+        if (isDrawingRef.current) {
+          endStroke();
+        }
+        return;
+      }
+
+      // Single touch - schedule drawing start after delay
+      // This gives time for a potential second finger to touch
+      if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        if (!touch) return;
+
+        const point = getPointFromTouch(touch);
+        if (point) {
+          pendingStartPointRef.current = point;
+
+          // Clear any existing timer
+          cancelPendingDraw();
+
+          // Schedule draw start
+          drawStartTimerRef.current = setTimeout(() => {
+            if (pendingStartPointRef.current) {
+              isDrawingRef.current = true;
+              dirtyTilesRef.current.clear();
+              lastPointRef.current = pendingStartPointRef.current;
+              markDirtyTile(pendingStartPointRef.current.x, pendingStartPointRef.current.y);
+              pendingStartPointRef.current = null;
+            }
+            drawStartTimerRef.current = null;
+          }, DRAW_START_DELAY);
+        }
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      // Multi-touch - cancel drawing and let Leaflet handle gesture
+      if (e.touches.length >= 2) {
+        cancelPendingDraw();
+        if (isDrawingRef.current) {
+          endStroke();
+        }
+        return;
+      }
+
+      // Single touch move
+      if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        if (!touch) return;
+
+        const point = getPointFromTouch(touch);
+
+        // If drawing hasn't started yet but we're moving, start immediately
+        // (user is clearly doing a single-touch drag)
+        if (!isDrawingRef.current && pendingStartPointRef.current) {
+          cancelPendingDraw();
+          isDrawingRef.current = true;
+          dirtyTilesRef.current.clear();
+          lastPointRef.current = point;
+          if (point) markDirtyTile(point.x, point.y);
+        }
+
+        // Draw if we're in drawing state
+        if (isDrawingRef.current && point && lastPointRef.current) {
+          drawLine(lastPointRef.current, point);
+          lastPointRef.current = point;
+          // Prevent scrolling while drawing
+          e.preventDefault();
+        }
+      }
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      void logDebug('touchEnd', {
+        touchCount: e.touches.length,
+        isDrawing: isDrawingRef.current,
+      });
+
+      // Cancel pending draw if finger lifted before delay
+      cancelPendingDraw();
+
+      // If all fingers lifted, end stroke
+      if (e.touches.length === 0) {
+        endStroke();
+      }
+    };
+
+    // Add listeners to document to capture all touch events
+    document.addEventListener('touchstart', handleTouchStart, { passive: true });
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+    document.addEventListener('touchend', handleTouchEnd, { passive: true });
+    document.addEventListener('touchcancel', handleTouchEnd, { passive: true });
+
+    return () => {
+      document.removeEventListener('touchstart', handleTouchStart);
+      document.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener('touchend', handleTouchEnd);
+      document.removeEventListener('touchcancel', handleTouchEnd);
+      cancelPendingDraw();
+    };
+  }, [mode, getPointFromTouch, drawLine, endStroke, markDirtyTile, cancelPendingDraw, DRAW_START_DELAY]);
+
+  // Mouse event handlers (for desktop)
+  useEffect(() => {
+    if (mode === 'navigate') return;
+
+    const handleMouseDown = (e: MouseEvent) => {
+      // Only handle left click
+      if (e.button !== 0) return;
+
+      const point = getPointFromMouse(e);
+      if (point) {
+        isDrawingRef.current = true;
+        dirtyTilesRef.current.clear();
+        lastPointRef.current = point;
+        markDirtyTile(point.x, point.y);
+      }
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDrawingRef.current) return;
+
+      const point = getPointFromMouse(e);
+      if (point && lastPointRef.current) {
+        drawLine(lastPointRef.current, point);
+        lastPointRef.current = point;
+      }
+    };
+
+    const handleMouseUp = () => {
+      endStroke();
+    };
+
+    // Add mouse listeners to document
+    document.addEventListener('mousedown', handleMouseDown);
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [mode, getPointFromMouse, drawLine, endStroke, markDirtyTile]);
 
   // Resize canvas when dimensions change
   useEffect(() => {
@@ -168,8 +302,6 @@ export function DrawingCanvas({
     }
   }, [width, height]);
 
-  // Pointer event styles based on mode
-  const pointerEvents = mode === 'navigate' ? 'none' : 'auto';
   const cursor = mode === 'draw' ? 'crosshair' : mode === 'erase' ? 'cell' : 'default';
 
   return (
@@ -183,15 +315,12 @@ export function DrawingCanvas({
         left: 0,
         width: '100%',
         height: '100%',
-        pointerEvents,
+        // Always let events pass through to map - we handle drawing via global listeners
+        pointerEvents: 'none',
         cursor,
-        touchAction: 'none',
+        // Let browser handle all touch actions - we intercept selectively
+        touchAction: 'auto',
       }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerLeave={handlePointerUp}
-      onPointerCancel={handlePointerUp}
     />
   );
 }
