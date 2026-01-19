@@ -767,12 +767,18 @@ export function MapWithDrawing({
             return;
           }
 
-          // Ensure canvas is visible before drawing
-          if (canvasRef.current && canvasRef.current.style.opacity !== '1') {
-            canvasRef.current.style.opacity = '1';
-            canvasRef.current.style.transform = '';
-            canvasRef.current.style.transformOrigin = '';
-            void logDebug('globalTouchStart_FORCE_SHOW_CANVAS', { version: BUILD_VERSION });
+          // Ensure canvas is visible and properly positioned before drawing
+          if (canvasRef.current) {
+            const needsReset = canvasRef.current.style.opacity !== '1' || canvasRef.current.style.transform !== '';
+            if (needsReset) {
+              canvasRef.current.style.opacity = '1';
+              canvasRef.current.style.transform = '';
+              canvasRef.current.style.transformOrigin = '';
+              void logDebug('globalTouchStart_FORCE_RESET_CANVAS', {
+                version: BUILD_VERSION,
+                reason: canvasRef.current.style.opacity !== '1' ? 'opacity' : 'transform',
+              });
+            }
           }
 
           void logDebug('globalTouchStart_DRAW_START', {
@@ -832,12 +838,18 @@ export function MapWithDrawing({
         if (touch && isDrawableZoom) {
           const point = getTouchPoint(touch);
           if (point) {
-            // Ensure canvas is visible before drawing
-            if (canvasRef.current && canvasRef.current.style.opacity !== '1') {
-              canvasRef.current.style.opacity = '1';
-              canvasRef.current.style.transform = '';
-              canvasRef.current.style.transformOrigin = '';
-              void logDebug('globalTouchMove_FORCE_SHOW_CANVAS', { version: BUILD_VERSION });
+            // Ensure canvas is visible and properly positioned before drawing
+            if (canvasRef.current) {
+              const needsReset = canvasRef.current.style.opacity !== '1' || canvasRef.current.style.transform !== '';
+              if (needsReset) {
+                canvasRef.current.style.opacity = '1';
+                canvasRef.current.style.transform = '';
+                canvasRef.current.style.transformOrigin = '';
+                void logDebug('globalTouchMove_FORCE_RESET_CANVAS', {
+                  version: BUILD_VERSION,
+                  reason: canvasRef.current.style.opacity !== '1' ? 'opacity' : 'transform',
+                });
+              }
             }
 
             void logDebug('globalTouchMove_IMMEDIATE_START', {
@@ -1272,6 +1284,38 @@ export function MapWithDrawing({
       map.off('moveend', handleMoveEnd);
     };
   }, [drawingState.mode, canvasId, reloadTilesForCurrentView, strokes, visibleLayerIds, redrawStrokes]);
+
+  // Reset canvas transform after map move in draw mode (pan during pinch-zoom)
+  useEffect(() => {
+    if (!mapRef.current || drawingState.mode === 'navigate' || !canvasId) return;
+
+    const handleMoveEndDraw = () => {
+      void (async () => {
+        // Flush pending saves first
+        if (onFlushSave) {
+          await onFlushSave();
+        }
+        // Reload tiles and redraw to ensure content is at correct position
+        await reloadTilesForCurrentView();
+        if (strokes !== undefined) {
+          redrawStrokes(strokes, visibleLayerIds);
+        }
+        // Reset transform and show canvas
+        if (canvasRef.current) {
+          canvasRef.current.style.transform = '';
+          canvasRef.current.style.transformOrigin = '';
+          canvasRef.current.style.opacity = '1';
+        }
+      })();
+    };
+
+    const map = mapRef.current;
+    map.on('moveend', handleMoveEndDraw);
+
+    return () => {
+      map.off('moveend', handleMoveEndDraw);
+    };
+  }, [drawingState.mode, canvasId, reloadTilesForCurrentView, strokes, visibleLayerIds, redrawStrokes, onFlushSave]);
 
   const cursor = drawingState.mode === 'navigate' ? 'grab' : !isDrawableZoom ? 'not-allowed' : drawingState.mode === 'draw' ? 'crosshair' : 'cell';
   // Use 'pinch-zoom' in draw mode:
